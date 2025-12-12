@@ -267,40 +267,72 @@
                 statusMsg.textContent = "✅ 宫门已开";
                 statusMsg.className = "text-xs text-center text-green-500 mt-2 font-bold";
                 setupFirestoreListener();
+            } else {
+                console.warn('Auth state: no user');
             }
         });
 
         function setupFirestoreListener() {
             const playersRef = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', COLLECTION_NAME);
             onSnapshot(playersRef, (snapshot) => {
-                snapshot.docChanges().forEach((change) => {
-                    const data = change.doc.data();
-                    const pid = change.doc.id;
-                    
-                    if (change.type === "added" || change.type === "modified") {
-                        if (pid === myPlayerId) return;
-                        if (!players[pid]) {
-                            players[pid] = { ...data, currentX: data.x, currentY: data.y };
-                        } else {
-                            players[pid].targetX = data.x;
-                            players[pid].targetY = data.y;
-                            players[pid].status = data.status;
-                            players[pid].color = data.color;
-                            players[pid].name = data.name;
-                            players[pid].msg = data.msg;
-                            if (data.msg && data.msg !== players[pid].lastMsgContent) {
-                                players[pid].msgTimer = 240; 
-                                players[pid].lastMsgContent = data.msg;
+                try {
+                    console.log('Firestore snapshot', snapshot.size, snapshot.docChanges().map(c => ({id: c.doc.id, type: c.type})));
+                    snapshot.docChanges().forEach((change) => {
+                        const data = change.doc.data();
+                        const pid = change.doc.id;
+                        
+                        if (change.type === "added" || change.type === "modified") {
+                            if (pid === myPlayerId) return;
+                            // 如果已有记录，使用 timestamp 防止旧事件覆盖新状态
+                            const incomingTs = data.timestamp ?? Date.now();
+                            if (!players[pid]) {
+                                players[pid] = { 
+                                    ...data, 
+                                    currentX: data.x, 
+                                    currentY: data.y,
+                                    targetX: data.x,
+                                    targetY: data.y,
+                                    timestamp: incomingTs,
+                                    lastMsgContent: data.msg || '',
+                                    msgTimer: data.msg ? 240 : 0
+                                };
+                            } else {
+                                // 如果 incoming 是旧的数据（时间戳更小），忽略
+                                if (players[pid].timestamp && incomingTs < players[pid].timestamp - 1000) {
+                                    // 如果后端时间乱序非常严重，可调这个容忍值
+                                    console.warn(`Ignored out-of-order update for ${pid}. incoming: ${incomingTs}, current: ${players[pid].timestamp}`);
+                                } else {
+                                    players[pid].timestamp = incomingTs;
+                                    // 更新目标位置以便插值
+                                    players[pid].targetX = data.x;
+                                    players[pid].targetY = data.y;
+                                    players[pid].status = data.status;
+                                    players[pid].color = data.color;
+                                    players[pid].name = data.name;
+                                    players[pid].msg = data.msg;
+                                    if (data.msg && data.msg !== players[pid].lastMsgContent) {
+                                        players[pid].msgTimer = 240; 
+                                        players[pid].lastMsgContent = data.msg;
+                                    }
+                                }
                             }
                         }
-                    }
-                    if (change.type === "removed") delete players[pid];
-                });
+                        if (change.type === "removed") {
+                            delete players[pid];
+                        }
+                    });
 
-                let count = 0;
-                Object.values(players).forEach(p => { if(p.status === 'alive') count++; });
-                if(myState.status === 'alive') count++;
-                playerCountEl.innerText = count;
+                    let count = 0;
+                    Object.values(players).forEach(p => { if(p.status === 'alive') count++; });
+                    if(myState.status === 'alive') count++;
+                    playerCountEl.innerText = count;
+                } catch(e) {
+                    console.error('onSnapshot processing error', e);
+                }
+            }, (err) => {
+                console.error('onSnapshot error', err);
+                statusMsg.textContent = "实时订阅出错: " + (err && err.message ? err.message : String(err));
+                statusMsg.classList.add("text-red-500");
             });
         }
 
@@ -312,8 +344,8 @@
 
             try {
                 await setDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', COLLECTION_NAME, myPlayerId), {
-                    x: Math.round(myState.x),
-                    y: Math.round(myState.y),
+                    x: myState.x, // 写浮点，避免四舍五入造成停滞
+                    y: myState.y,
                     color: myState.color,
                     name: myState.name,
                     status: myState.status,
@@ -321,7 +353,11 @@
                     timestamp: now
                 });
                 lastUploadTime = now;
-            } catch(e) {}
+            } catch(e) {
+                console.error("uploadMyState error:", e);
+                statusMsg.textContent = "上传位置失败 — 请检查网络或 Firestore 规则";
+                statusMsg.classList.add("text-red-500", "font-bold");
+            }
         }
 
         // --- 视觉效果系统 ---
@@ -383,6 +419,8 @@
             gameOverScreen.classList.add('hidden');
             document.getElementById('game-status-text').innerText = "ALIVE";
             document.getElementById('game-status-text').className = "text-xl font-bold text-green-400 block text-center";
+            // 上传复活状态
+            uploadMyState();
         }
 
         function updatePhysics() {
@@ -425,11 +463,12 @@
                 if (p.status !== 'alive') continue;
 
                 if (p.targetX !== undefined) {
-                    p.currentX = p.currentX + (p.targetX - p.currentX) * 0.15;
-                    p.currentY = p.currentY + (p.targetY - p.currentY) * 0.15;
+                    // 插值：current 移向 target
+                    p.currentX = (p.currentX ?? p.x) + ((p.targetX ?? p.x) - (p.currentX ?? p.x)) * 0.15;
+                    p.currentY = (p.currentY ?? p.y) + ((p.targetY ?? p.y) - (p.currentY ?? p.y)) * 0.15;
                 }
-                const otherX = p.currentX || p.x;
-                const otherY = p.currentY || p.y;
+                const otherX = (p.currentX ?? p.x);
+                const otherY = (p.currentY ?? p.y);
                 const dx = myState.x - otherX;
                 const dy = myState.y - otherY;
                 const dist = Math.sqrt(dx*dx + dy*dy);
@@ -439,180 +478,4 @@
                     const angle = Math.atan2(dy, dx);
                     
                     // 只要判定到碰撞，就给一个巨大的反弹力
-                    // 这样即使双方画面有延迟，只要有一瞬间重叠，双方都会被弹开
-                    myState.vx += Math.cos(angle) * BOUNCE_FORCE * 5;
-                    myState.vy += Math.sin(angle) * BOUNCE_FORCE * 5;
-                    
-                    // 物理推挤
-                    const overlap = (PLAYER_RADIUS * 2.2) - dist;
-                    myState.x += Math.cos(angle) * overlap * 0.5;
-                    myState.y += Math.sin(angle) * overlap * 0.5;
-
-                    createParticles((myState.x + otherX)/2, (myState.y + otherY)/2, '#fffbeb');
-                }
-                if (p.msgTimer > 0) p.msgTimer--;
-            }
-
-            const distFromCenter = Math.sqrt(myState.x**2 + myState.y**2);
-            if (distFromCenter > ARENA_RADIUS + PLAYER_RADIUS) {
-                die();
-            }
-
-            if (myState.msgTimer > 0) myState.msgTimer--;
-            if (myState.msgTimer <= 0) myState.msg = '';
-        }
-
-        function die() {
-            myState.status = 'dead';
-            myState.vx = 0; myState.vy = 0;
-            document.getElementById('game-status-text').innerText = "DEAD";
-            document.getElementById('game-status-text').className = "text-xl font-bold text-red-600 block text-center";
-            gameOverScreen.classList.remove('hidden');
-            uploadMyState();
-        }
-
-        // --- 绘图函数 ---
-
-        function drawCrown(x, y, scale = 1, color = '#fbbf24') {
-            ctx.save();
-            const floatY = Math.sin(frameCount * 0.1) * 3;
-            ctx.translate(x, y - PLAYER_RADIUS - 8 + floatY);
-            ctx.scale(scale, scale);
-            ctx.beginPath(); ctx.ellipse(0, 5, 12, 3, 0, 0, Math.PI*2);
-            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)'; ctx.fill();
-            ctx.fillStyle = color; ctx.strokeStyle = '#b45309'; ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.moveTo(-15, 0); ctx.quadraticCurveTo(-15, -10, -20, -15);
-            ctx.lineTo(-10, -8); ctx.lineTo(0, -22); ctx.lineTo(10, -8);
-            ctx.quadraticCurveTo(15, -10, 20, -15); ctx.quadraticCurveTo(15, 0, 15, 0);
-            ctx.quadraticCurveTo(0, 6, -15, 0); ctx.closePath();
-            const grad = ctx.createLinearGradient(-20, -20, 20, 0);
-            grad.addColorStop(0, '#fef08a'); grad.addColorStop(0.5, '#eab308'); grad.addColorStop(1, '#a16207');
-            ctx.fillStyle = grad; ctx.fill(); ctx.stroke();
-            ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(0, -12, 3, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(-1, -13, 1, 0, Math.PI*2); ctx.fill();
-            ctx.restore();
-        }
-
-        function drawPlayer(x, y, color, name, msg, isSelf) {
-            ctx.fillStyle = 'rgba(0,0,0,0.5)';
-            ctx.beginPath(); ctx.ellipse(x, y + 8, PLAYER_RADIUS, PLAYER_RADIUS * 0.6, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.arc(x, y, PLAYER_RADIUS + 2, 0, Math.PI * 2); ctx.fill();
-            const grad = ctx.createRadialGradient(x - 8, y - 8, 2, x, y, PLAYER_RADIUS);
-            grad.addColorStop(0, '#fff'); grad.addColorStop(0.2, color); grad.addColorStop(0.8, color); grad.addColorStop(1, '#1a0505');
-            ctx.beginPath(); ctx.arc(x, y, PLAYER_RADIUS, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
-            ctx.beginPath(); ctx.ellipse(x - 6, y - 6, PLAYER_RADIUS/2.5, PLAYER_RADIUS/3.5, -Math.PI/4, 0, Math.PI*2);
-            ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
-            drawCrown(x, y, 1, '#fbbf24');
-            ctx.font = 'bold 12px "Cinzel Decorative"'; ctx.textAlign = 'center'; ctx.fillStyle = '#fde047';
-            ctx.shadowColor = 'black'; ctx.shadowBlur = 4; ctx.fillText(name, x, y + PLAYER_RADIUS + 20); ctx.shadowBlur = 0;
-            if (msg) {
-                ctx.font = '14px "Playfair Display"'; const width = ctx.measureText(msg).width + 20;
-                ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.roundRect(x - width/2 + 2, y - 73, width, 30, 4); ctx.fill();
-                ctx.fillStyle = '#fef3c7'; ctx.strokeStyle = '#b45309'; ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.roundRect(x - width/2, y - 75, width, 30, 4); ctx.fill(); ctx.stroke();
-                ctx.fillStyle = '#451a03'; ctx.fillText(msg, x, y - 55);
-                ctx.beginPath(); ctx.moveTo(x, y - 45); ctx.lineTo(x - 6, y - 38); ctx.lineTo(x + 6, y - 38);
-                ctx.fillStyle = '#fef3c7'; ctx.fill(); ctx.stroke();
-            }
-        }
-
-        function draw() {
-            const targetCamX = -myState.x + canvas.width / 2;
-            const targetCamY = -myState.y + canvas.height / 2;
-            cameraX += (targetCamX - cameraX) * 0.08;
-            cameraY += (targetCamY - cameraY) * 0.08;
-
-            ctx.fillStyle = '#2a0a12'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.clearRect(0,0,canvas.width, canvas.height); 
-            ctx.save(); ctx.translate(cameraX, cameraY);
-
-            const abyssGrad = ctx.createRadialGradient(0,0, ARENA_RADIUS, 0,0, ARENA_RADIUS + 200);
-            abyssGrad.addColorStop(0, 'rgba(0,0,0,0.5)'); abyssGrad.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = abyssGrad; ctx.beginPath(); ctx.arc(0,0, ARENA_RADIUS+200, 0, Math.PI*2); ctx.fill();
-
-            ctx.fillStyle = '#271c19'; ctx.beginPath(); ctx.arc(0, 20, ARENA_RADIUS, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(0, 0, ARENA_RADIUS, 0, Math.PI*2); ctx.save(); ctx.clip();
-            if (floorPattern) { ctx.fillStyle = floorPattern; ctx.fillRect(-ARENA_RADIUS, -ARENA_RADIUS, ARENA_RADIUS*2, ARENA_RADIUS*2); }
-            ctx.strokeStyle = 'rgba(251, 191, 36, 0.15)'; ctx.lineWidth = 2; ctx.beginPath();
-            for(let i=0; i<8; i++) { const angle = i * (Math.PI/4); ctx.moveTo(0,0); ctx.lineTo(Math.cos(angle)*ARENA_RADIUS, Math.sin(angle)*ARENA_RADIUS); }
-            ctx.stroke();
-            ctx.beginPath(); ctx.arc(0, 0, 150, 0, Math.PI*2); ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)'; ctx.lineWidth = 15; ctx.stroke();
-            ctx.fillStyle = 'rgba(251, 191, 36, 0.2)'; ctx.beginPath();
-            for(let i=0; i<16; i++) { const r = i%2===0 ? 80 : 40; const a = i * (Math.PI/8); ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); }
-            ctx.fill(); ctx.restore();
-
-            ctx.beginPath(); ctx.arc(0, 0, ARENA_RADIUS, 0, Math.PI*2); ctx.strokeStyle = '#b45309'; ctx.lineWidth = 12; ctx.stroke();
-            ctx.beginPath(); ctx.arc(0, 0, ARENA_RADIUS - 6, 0, Math.PI*2); ctx.strokeStyle = '#fcd34d'; ctx.lineWidth = 4; ctx.stroke();
-            for(let i=0; i<24; i++) { const a = i * (Math.PI*2/24); const x = Math.cos(a) * ARENA_RADIUS; const y = Math.sin(a) * ARENA_RADIUS; ctx.fillStyle = '#fffbeb'; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill(); }
-
-            const sortedPlayers = Object.values(players).concat(myState.status==='alive' ? [myState] : []);
-            sortedPlayers.sort((a,b) => (a.currentY||a.y) - (b.currentY||b.y));
-
-            sortedPlayers.forEach(p => {
-                const isSelf = (p === myState);
-                if (p.status === 'alive') {
-                    drawPlayer(p.currentX||p.x, p.currentY||p.y, p.color, p.name, p.msg, isSelf);
-                }
-            });
-
-            particles.forEach(p => {
-                ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
-                if (p.type === 'sparkle') { ctx.fillRect(p.x - p.size*2, p.y - 0.5, p.size*4, 1); ctx.fillRect(p.x - 0.5, p.y - p.size*2, 1, p.size*4); }
-            });
-            ctx.globalAlpha = 1; ctx.restore();
-        }
-
-        function gameLoop() {
-            updatePhysics();
-            uploadMyState();
-            draw();
-            requestAnimationFrame(gameLoop);
-        }
-
-        // --- 事件 ---
-        startBtn.onclick = startGame;
-        respawnBtn.onclick = respawn;
-
-        window.selectColor = (c) => {
-            myState.color = c;
-            document.querySelectorAll('.color-btn').forEach(b => {
-                const isActive = b.onclick.toString().includes(c);
-                b.style.borderColor = isActive ? '#fcd34d' : 'transparent';
-                b.style.transform = isActive ? 'scale(1.2)' : 'scale(1)';
-            });
-        };
-
-        window.onkeydown = (e) => {
-            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
-            if (e.key === 'Enter') {
-                const input = document.getElementById('chat-input');
-                if (document.activeElement === input) {
-                    const txt = input.value.trim();
-                    if(txt) { myState.msg = txt; myState.msgTimer = 240; input.value=''; input.blur(); uploadMyState(); }
-                } else { input.focus(); }
-            }
-        };
-        window.onkeyup = (e) => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; };
-        document.getElementById('chat-send-btn').onclick = () => {
-             const input = document.getElementById('chat-input');
-             const txt = input.value.trim();
-             if(txt) { myState.msg = txt; myState.msgTimer = 240; input.value=''; input.blur(); uploadMyState(); }
-        };
-
-        const joyZone = document.getElementById('joystick-zone');
-        const joyKnob = document.getElementById('joystick-knob');
-        joyZone.ontouchstart = (e) => { e.preventDefault(); joystickActive=true; updateJoy(e.touches[0]); };
-        joyZone.ontouchmove = (e) => { e.preventDefault(); if(joystickActive) updateJoy(e.touches[0]); };
-        joyZone.ontouchend = (e) => { e.preventDefault(); joystickActive=false; joystickData={x:0,y:0}; joyKnob.style.transform = 'translate(-50%,-50%)'; };
-        function updateJoy(touch) {
-            const rect = joyZone.getBoundingClientRect();
-            let dx = touch.clientX - (rect.left + rect.width/2);
-            let dy = touch.clientY - (rect.top + rect.height/2);
-            const dist = Math.sqrt(dx*dx+dy*dy); const maxR = 40;
-            if(dist > maxR) { dx = (dx/dist)*maxR; dy = (dy/dist)*maxR; }
-            joyKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-            joystickData.x = dx/maxR; joystickData.y = dy/maxR;
-        }
-    </script>
-</body>
-</html>
+                    // 这样即使双方画面有延迟，只要有

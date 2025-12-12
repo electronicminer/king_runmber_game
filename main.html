@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>国王大乱斗 - 联机修复版</title>
+    <title>国王大乱斗 - 终极联机修复版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Playfair+Display:ital,wght@1,700&display=swap');
@@ -98,6 +98,12 @@
             transform: translate(-50%, -50%);
             box-shadow: 0 5px 15px rgba(0,0,0,0.6); pointer-events: none;
         }
+        
+        #debug-info {
+            position: fixed; top: 5px; right: 5px; 
+            font-family: monospace; font-size: 10px; color: rgba(255,255,255,0.3);
+            pointer-events: none; z-index: 100;
+        }
     </style>
 </head>
 <body>
@@ -131,7 +137,7 @@
                 <button id="start-btn" class="royal-btn w-full py-4 text-xl rounded mt-4" disabled>
                     开启征程
                 </button>
-                <p id="status-msg" class="text-xs text-center text-yellow-600/50 mt-2">正在通报国王...</p>
+                <p id="status-msg" class="text-xs text-center text-yellow-600/50 mt-2">正在建立连接...</p>
             </div>
         </div>
     </div>
@@ -148,6 +154,7 @@
 
     <!-- 游戏 UI -->
     <div id="game-ui" class="hidden pointer-events-none">
+        <div id="debug-info"></div>
         <div class="absolute top-0 left-0 w-full flex justify-between pt-4 px-4 z-40">
             <div class="hud-ribbon px-8 py-3 rounded-full shadow-2xl backdrop-blur">
                 <span class="text-xs text-yellow-500 block text-center">SURVIVORS</span>
@@ -190,6 +197,7 @@
         const respawnBtn = document.getElementById('respawn-btn');
         const statusMsg = document.getElementById('status-msg');
         const playerCountEl = document.getElementById('player-count');
+        const debugInfo = document.getElementById('debug-info');
         
         let currentUser = null;
         let myPlayerId = null;
@@ -206,7 +214,11 @@
         
         // --- 关键修正：使用动态环境 AppID ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const COLLECTION_NAME = 'kings_rumble_royal_prod'; 
+        // 升级集合版本，清理旧数据
+        const COLLECTION_NAME = 'kings_rumble_royal_v2'; 
+
+        // 显示调试信息
+        debugInfo.innerText = `Room: ${appId.substring(0,6)}... | Ver: v2`;
 
         let cameraX = 0;
         let cameraY = 0;
@@ -245,18 +257,29 @@
         const auth = getAuth(app);
         db = getFirestore(app);
         
-        // --- 认证初始化 (关键修正) ---
+        // --- 认证初始化 (终极修复逻辑) ---
         const initAuth = async () => {
             try {
+                let signedIn = false;
+                // 1. 尝试使用环境令牌
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    // 如果环境提供了令牌，必须使用它来获取正确的读写权限
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
+                    try {
+                        console.log("Attempting custom token login...");
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                        signedIn = true;
+                    } catch (e) {
+                        console.warn("Custom token invalid, falling back to anonymous.", e);
+                    }
+                }
+                
+                // 2. 如果令牌失败或不存在，强制使用匿名登录
+                if (!signedIn) {
+                    console.log("Attempting anonymous login...");
                     await signInAnonymously(auth);
                 }
             } catch (error) {
-                console.error("Auth Error:", error);
-                statusMsg.textContent = "连接失败: 认证错误";
+                console.error("Auth Critical Failure:", error);
+                statusMsg.textContent = "致命错误: 无法连接服务器";
                 statusMsg.classList.add("text-red-500", "font-bold");
             }
         };
@@ -267,9 +290,13 @@
                 currentUser = user;
                 myPlayerId = user.uid;
                 startBtn.disabled = false;
-                statusMsg.textContent = "✅ 宫门已开 (已连接)";
+                statusMsg.textContent = "✅ 宫门已开 (网络正常)";
                 statusMsg.className = "text-xs text-center text-green-500 mt-2 font-bold";
+                // 仅在确认登录后才启动监听
                 setupFirestoreListener();
+            } else {
+                startBtn.disabled = true;
+                statusMsg.textContent = "正在连接...";
             }
         });
 
@@ -278,6 +305,8 @@
             // 关键修正：使用 appId 动态路径，确保有权限监听
             const playersRef = collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME);
             
+            console.log("Listening to path:", `artifacts/${appId}/public/data/${COLLECTION_NAME}`);
+
             onSnapshot(playersRef, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     const data = change.doc.data();
@@ -285,6 +314,9 @@
                     
                     if (change.type === "added" || change.type === "modified") {
                         if (pid === myPlayerId) return;
+                        // 忽略过旧的数据 (超过30秒未更新视为离线)
+                        if (Date.now() - (data.timestamp || 0) > 30000) return;
+
                         if (!players[pid]) {
                             players[pid] = { ...data, currentX: data.x, currentY: data.y };
                         } else {
@@ -305,14 +337,15 @@
                     if (change.type === "removed") delete players[pid];
                 });
 
+                // 刷新计数
                 let count = 0;
                 Object.values(players).forEach(p => { if(p.status === 'alive') count++; });
                 if(myState.status === 'alive') count++;
                 playerCountEl.innerText = count;
             }, (error) => {
                 console.error("Snapshot Error:", error);
-                // 如果出现权限错误，提示用户
-                statusMsg.textContent = "数据同步错误，请刷新重试";
+                statusMsg.textContent = "数据同步中断";
+                statusMsg.classList.add("text-red-500");
             });
         }
 
@@ -335,7 +368,7 @@
                 });
                 lastUploadTime = now;
             } catch(e) {
-                console.error("Upload Error:", e);
+                console.error("Upload Error (Check Console):", e);
             }
         }
 

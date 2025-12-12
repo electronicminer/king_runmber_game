@@ -1,0 +1,383 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Trophy, RotateCcw, Info } from 'lucide-react';
+
+// --- 工具函数和游戏逻辑 ---
+
+const GRID_SIZE = 4;
+
+// 生成空网格
+const getEmptyGrid = () => {
+  return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
+};
+
+// 在随机空位生成一个新方块 (2 或 4)
+const addRandomTile = (grid) => {
+  const emptyCells = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (grid[r][c] === 0) {
+        emptyCells.push({ r, c });
+      }
+    }
+  }
+
+  if (emptyCells.length === 0) return grid;
+
+  const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+  const newGrid = grid.map(row => [...row]);
+  newGrid[randomCell.r][randomCell.c] = Math.random() < 0.9 ? 2 : 4;
+  return newGrid;
+};
+
+// 检查是否游戏结束
+const checkGameOver = (grid) => {
+  // 检查是否有空位
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (grid[r][c] === 0) return false;
+    }
+  }
+
+  // 检查是否可以合并 (水平或垂直)
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (c < GRID_SIZE - 1 && grid[r][c] === grid[r][c + 1]) return false;
+      if (r < GRID_SIZE - 1 && grid[r][c] === grid[r + 1][c]) return false;
+    }
+  }
+
+  return true;
+};
+
+// 获取方块颜色样式
+const getTileColor = (value) => {
+  const colors = {
+    0: 'bg-[#cdc1b4]',
+    2: 'bg-[#eee4da] text-[#776e65]',
+    4: 'bg-[#ede0c8] text-[#776e65]',
+    8: 'bg-[#f2b179] text-white',
+    16: 'bg-[#f59563] text-white',
+    32: 'bg-[#f67c5f] text-white',
+    64: 'bg-[#f65e3b] text-white',
+    128: 'bg-[#edcf72] text-white shadow-[0_0_30px_10px_rgba(243,215,116,0.23)]',
+    256: 'bg-[#edcc61] text-white shadow-[0_0_30px_10px_rgba(243,215,116,0.31)]',
+    512: 'bg-[#edc850] text-white shadow-[0_0_30px_10px_rgba(243,215,116,0.39)]',
+    1024: 'bg-[#edc53f] text-white shadow-[0_0_30px_10px_rgba(243,215,116,0.47)]',
+    2048: 'bg-[#edc22e] text-white shadow-[0_0_30px_10px_rgba(243,215,116,0.55)]',
+  };
+  return colors[value] || 'bg-[#3c3a32] text-white';
+};
+
+// 获取字体大小
+const getFontSize = (value) => {
+  if (value < 100) return 'text-3xl md:text-4xl';
+  if (value < 1000) return 'text-2xl md:text-3xl';
+  return 'text-xl md:text-2xl';
+};
+
+// --- 主组件 ---
+
+export default function App() {
+  const [grid, setGrid] = useState(getEmptyGrid());
+  const [score, setScore] = useState(0);
+  const [bestScore, setBestScore] = useState(0);
+  const [gameOver, setGameOver] = useState(false);
+  const [gameWon, setGameWon] = useState(false);
+  const [animating, setAnimating] = useState(false); // 防止动画期间快速按键
+  
+  // 触摸手势状态
+  const touchStart = useRef({ x: 0, y: 0 });
+  const touchEnd = useRef({ x: 0, y: 0 });
+
+  // 初始化游戏
+  useEffect(() => {
+    const savedBest = localStorage.getItem('2048-best-score');
+    if (savedBest) {
+      setBestScore(parseInt(savedBest, 10));
+    }
+    startNewGame();
+  }, []);
+
+  // 更新最高分
+  useEffect(() => {
+    if (score > bestScore) {
+      setBestScore(score);
+      localStorage.setItem('2048-best-score', score.toString());
+    }
+  }, [score, bestScore]);
+
+  const startNewGame = () => {
+    let newGrid = getEmptyGrid();
+    newGrid = addRandomTile(newGrid);
+    newGrid = addRandomTile(newGrid);
+    setGrid(newGrid);
+    setScore(0);
+    setGameOver(false);
+    setGameWon(false);
+  };
+
+  // 核心移动逻辑
+  const move = useCallback((direction) => {
+    if (gameOver || gameWon || animating) return;
+
+    setAnimating(true);
+    // 稍微延迟解锁，防止过快输入
+    setTimeout(() => setAnimating(false), 100);
+
+    let rotatedGrid = [...grid.map(row => [...row])];
+    let scoreToAdd = 0;
+    let moved = false;
+
+    // 1. 旋转网格，使得所有操作都统一为 "向左移动"
+    // 0: Left, 1: Down (rotate 3), 2: Right (rotate 2), 3: Up (rotate 1) 
+    // Wait, simpler logic:
+    // Up: Transpose -> Left -> Transpose
+    // Down: Transpose -> Right -> Transpose
+    // Right: Reverse -> Left -> Reverse
+    // Left: Normal
+
+    const rotateGrid = (matrix) => {
+      return matrix[0].map((val, index) => matrix.map(row => row[index]).reverse());
+    };
+    
+    // Rotate 90deg clockwise helper
+    const rotateClockwise = (matrix, times) => {
+      let temp = matrix;
+      for (let i = 0; i < times; i++) {
+        temp = rotateGrid(temp);
+      }
+      return temp;
+    };
+
+    // 标准化方向：全部转换为向左处理
+    // Up (0), Right (1), Down (2), Left (3) - 自定义映射
+    // 实际上：
+    // Left: 不转
+    // Right: 转2次 (180)
+    // Up: 转3次 (270) / 或者逆时针1次
+    // Down: 转1次 (90)
+    
+    let rotations = 0;
+    if (direction === 'up') rotations = 3; // Rotate 270 deg (or -90) makes Up -> Left
+    if (direction === 'right') rotations = 2; // Right -> Left
+    if (direction === 'down') rotations = 1; // Down -> Left
+    
+    // 应用旋转
+    let workingGrid = rotateClockwise(rotatedGrid, rotations);
+
+    // 处理向左合并的逻辑
+    const newGrid = workingGrid.map(row => {
+      // 1. 去除0
+      let filtered = row.filter(val => val !== 0);
+      
+      // 2. 合并
+      for (let i = 0; i < filtered.length - 1; i++) {
+        if (filtered[i] === filtered[i + 1]) {
+          filtered[i] *= 2;
+          scoreToAdd += filtered[i];
+          filtered.splice(i + 1, 1);
+          // 检查是否达到 2048
+          if (filtered[i] === 2048) setGameWon(true);
+        }
+      }
+      
+      // 3. 补齐0
+      while (filtered.length < GRID_SIZE) {
+        filtered.push(0);
+      }
+      return filtered;
+    });
+
+    // 检查是否有变动
+    if (JSON.stringify(workingGrid) !== JSON.stringify(newGrid)) {
+      moved = true;
+    }
+
+    // 还原旋转
+    // 旋转几次还需要转几次回去： (4 - rotations) % 4
+    const rotationsBack = (4 - rotations) % 4;
+    let finalGrid = rotateClockwise(newGrid, rotationsBack);
+
+    if (moved) {
+      finalGrid = addRandomTile(finalGrid);
+      setGrid(finalGrid);
+      setScore(prev => prev + scoreToAdd);
+      
+      if (checkGameOver(finalGrid)) {
+        setGameOver(true);
+      }
+    }
+  }, [grid, gameOver, gameWon, animating]);
+
+  // 键盘事件监听
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault();
+          move('up');
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          move('down');
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          move('left');
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          move('right');
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [move]);
+
+  // 触摸事件处理
+  const handleTouchStart = (e) => {
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+
+  const handleTouchEnd = (e) => {
+    touchEnd.current = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    handleSwipe();
+  };
+
+  const handleSwipe = () => {
+    const dx = touchEnd.current.x - touchStart.current.x;
+    const dy = touchEnd.current.y - touchStart.current.y;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    if (Math.max(absDx, absDy) > 30) { // 最小滑动距离
+      if (absDx > absDy) {
+        // 水平
+        move(dx > 0 ? 'right' : 'left');
+      } else {
+        // 垂直
+        move(dy > 0 ? 'down' : 'up');
+      }
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#faf8ef] flex flex-col items-center justify-center font-sans p-4"
+         onTouchStart={handleTouchStart}
+         onTouchEnd={handleTouchEnd}>
+      
+      {/* 头部信息 */}
+      <div className="w-full max-w-[500px] flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-6xl font-bold text-[#776e65]">2048</h1>
+          <p className="text-[#776e65] mt-2 text-sm font-medium">合并数字直到达到 2048!</p>
+        </div>
+        
+        <div className="flex gap-2">
+          <div className="bg-[#bbada0] rounded-md p-2 min-w-[80px] text-center text-white">
+            <div className="text-xs uppercase font-bold tracking-wide text-[#eee4da]">得分</div>
+            <div className="text-xl font-bold">{score}</div>
+          </div>
+          <div className="bg-[#bbada0] rounded-md p-2 min-w-[80px] text-center text-white relative">
+            <div className="text-xs uppercase font-bold tracking-wide text-[#eee4da]">最高分</div>
+            <div className="text-xl font-bold">{bestScore}</div>
+            {score > 0 && score >= bestScore && (
+              <Trophy className="absolute -top-3 -right-3 w-6 h-6 text-yellow-500 fill-current animate-bounce" />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 控制栏 */}
+      <div className="w-full max-w-[500px] flex justify-between items-center mb-6">
+         <div className="text-[#776e65] flex items-center gap-2">
+            <Info size={20} />
+            <span className="hidden sm:inline">使用方向键或滑动屏幕来移动</span>
+            <span className="sm:hidden">滑动屏幕移动</span>
+         </div>
+         <button 
+          onClick={startNewGame}
+          className="bg-[#8f7a66] hover:bg-[#806d5b] text-white font-bold py-2 px-4 rounded flex items-center gap-2 transition-colors"
+        >
+          <RotateCcw size={18} /> 新游戏
+        </button>
+      </div>
+
+      {/* 游戏区域 */}
+      <div className="relative bg-[#bbada0] rounded-lg p-3 touch-none select-none shadow-lg">
+        {/* 背景网格 */}
+        <div className="grid grid-cols-4 gap-3">
+          {Array.from({ length: 16 }).map((_, i) => (
+            <div key={i} className="w-16 h-16 sm:w-24 sm:h-24 bg-[#cdc1b4] rounded-md"></div>
+          ))}
+        </div>
+
+        {/* 实际方块层 (Absolute positioning for simplistic rendering, 
+            but using Grid overlap here for simpler consistent layout in React without complex FLIP animations) */}
+        <div className="absolute top-3 left-3 grid grid-cols-4 gap-3">
+           {grid.map((row, rIndex) => (
+             row.map((val, cIndex) => (
+                <div key={`${rIndex}-${cIndex}`} className="w-16 h-16 sm:w-24 sm:h-24 flex justify-center items-center">
+                  {val !== 0 && (
+                    <div className={`
+                      w-full h-full rounded-md flex justify-center items-center font-bold transition-all duration-200 ease-in-out transform scale-100 animate-pop-in
+                      ${getTileColor(val)}
+                      ${getFontSize(val)}
+                    `}>
+                      {val}
+                    </div>
+                  )}
+                </div>
+             ))
+           ))}
+        </div>
+
+        {/* 游戏结束/胜利 遮罩 */}
+        {(gameOver || gameWon) && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[rgba(238,228,218,0.73)] rounded-lg animate-fade-in">
+            <h2 className="text-6xl font-bold text-[#776e65] mb-4">
+              {gameWon ? '你赢了!' : '游戏结束!'}
+            </h2>
+            <div className="flex gap-4">
+              {gameWon && (
+                <button 
+                  onClick={() => setGameWon(false)} // 继续玩
+                  className="bg-transparent border-2 border-[#8f7a66] text-[#8f7a66] font-bold py-3 px-6 rounded hover:bg-[#8f7a66] hover:text-white transition-colors"
+                >
+                  继续挑战
+                </button>
+              )}
+              <button 
+                onClick={startNewGame}
+                className="bg-[#8f7a66] text-white font-bold py-3 px-6 rounded shadow-lg hover:bg-[#806d5b] transition-transform active:scale-95"
+              >
+                再来一局
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style jsx global>{`
+        @keyframes pop-in {
+          0% { opacity: 0; transform: scale(0.5); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes fade-in {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        .animate-pop-in {
+          animation: pop-in 0.2s ease-out backwards;
+        }
+        .animate-fade-in {
+          animation: fade-in 0.8s ease-in forwards;
+        }
+      `}</style>
+    </div>
+  );
+}

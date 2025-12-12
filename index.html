@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>国王大乱斗 - 局域网联机版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 PeerJS 用于 P2P 通信 -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Playfair+Display:ital,wght@1,700&display=swap');
+
+        /* --- 皇家视觉风格 --- */
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #1a0f0f; 
+            background-image: radial-gradient(circle at 50% 50%, #2a1212 0%, #0f0505 100%);
+            touch-action: none; 
+            user-select: none; 
+            font-family: 'Playfair Display', serif;
+            color: #fef3c7;
+        }
+        canvas { display: block; }
+
+        /* 黄金画框 */
+        .gold-frame-panel {
+            background: linear-gradient(135deg, #450a0a, #1a0505);
+            border: 4px solid transparent;
+            border-image: linear-gradient(to bottom right, #fbbf24, #b45309, #78350f, #fbbf24) 1;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 0 1px rgba(251, 191, 36, 0.3) inset;
+            position: relative;
+        }
+
+        /* 装饰元素 */
+        .corner-decor {
+            position: absolute; width: 16px; height: 16px;
+            border: 2px solid #fbbf24;
+            transition: all 0.3s ease;
+        }
+        .corner-tl { top: -6px; left: -6px; border-right: none; border-bottom: none; }
+        .corner-tr { top: -6px; right: -6px; border-left: none; border-bottom: none; }
+        .corner-bl { bottom: -6px; left: -6px; border-right: none; border-top: none; }
+        .corner-br { bottom: -6px; right: -6px; border-left: none; border-top: none; }
+
+        /* 按钮样式 */
+        .royal-btn {
+            background: linear-gradient(to bottom, #991b1b, #7f1d1d);
+            border: 1px solid #fcd34d;
+            box-shadow: 0 4px 0 #450a0a, 0 5px 10px rgba(0,0,0,0.5);
+            color: #fef3c7;
+            font-family: 'Cinzel Decorative', cursive;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.1s;
+            text-shadow: 0 2px 2px rgba(0,0,0,0.5);
+        }
+        .royal-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            background: linear-gradient(to bottom, #dc2626, #991b1b);
+            box-shadow: 0 6px 0 #450a0a, 0 10px 20px rgba(220, 38, 38, 0.2);
+        }
+        .royal-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #450a0a, inset 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .royal-btn:disabled {
+            filter: grayscale(1); opacity: 0.5; cursor: not-allowed;
+        }
+        .secondary-btn {
+            background: rgba(0,0,0,0.3); border: 1px solid #78350f;
+            box-shadow: none; font-size: 0.9rem;
+        }
+
+        /* 输入框 */
+        .royal-input {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid #78350f;
+            color: #fcd34d;
+            text-align: center;
+            font-family: monospace;
+            letter-spacing: 2px;
+            transition: all 0.3s;
+        }
+        .royal-input:focus {
+            outline: none; border-color: #fbbf24;
+            background: rgba(0,0,0,0.6);
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.1);
+        }
+
+        /* 动画 */
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+        /* 摇杆 */
+        #joystick-zone {
+            position: absolute; bottom: 40px; left: 40px;
+            width: 120px; height: 120px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%; display: none; z-index: 50;
+        }
+        #joystick-knob {
+            position: absolute; top: 50%; left: 50%;
+            width: 50px; height: 50px;
+            background: radial-gradient(circle at 30% 30%, #fbbf24, #b45309);
+            border-radius: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5); pointer-events: none;
+        }
+
+        /* 房间号显示 */
+        .room-code-display {
+            font-family: 'Cinzel Decorative', cursive;
+            background: rgba(0,0,0,0.6);
+            border: 1px dashed #fbbf24;
+            color: #fbbf24;
+            font-size: 2rem;
+            letter-spacing: 4px;
+            text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+            cursor: pointer;
+        }
+        .room-code-display:hover { background: rgba(251, 191, 36, 0.1); }
+        
+        #connection-log {
+            font-family: monospace; font-size: 10px; color: #666;
+            position: fixed; bottom: 5px; right: 5px; pointer-events: none; z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 主菜单 / 大厅 -->
+    <div id="menu-screen" class="fixed inset-0 flex items-center justify-center z-50 bg-black/80 backdrop-blur-sm fade-in">
+        <div class="gold-frame-panel p-8 w-full max-w-md text-center">
+            <div class="corner-decor corner-tl"></div><div class="corner-decor corner-tr"></div>
+            <div class="corner-decor corner-bl"></div><div class="corner-decor corner-br"></div>
+            
+            <h1 class="text-4xl mb-2 text-yellow-500" style="font-family: 'Cinzel Decorative';">King's Rumble</h1>
+            <p class="text-yellow-200/50 mb-8 text-sm uppercase tracking-widest">P2P 局域网联机版</p>
+
+            <!-- 名字与颜色设置 -->
+            <div class="mb-6 space-y-4">
+                <input type="text" id="player-name" class="royal-input w-full py-3 text-lg rounded" placeholder="Your Name" maxlength="8" value="Knight">
+                
+                <div class="flex justify-center gap-3">
+                    <button class="color-btn w-10 h-10 rounded-full border-2 border-transparent transition hover:scale-110" style="background:#ef4444" onclick="selectColor('#ef4444', this)"></button>
+                    <button class="color-btn w-10 h-10 rounded-full border-2 border-transparent transition hover:scale-110" style="background:#3b82f6" onclick="selectColor('#3b82f6', this)"></button>
+                    <button class="color-btn w-10 h-10 rounded-full border-2 border-transparent transition hover:scale-110" style="background:#10b981" onclick="selectColor('#10b981', this)"></button>
+                    <button class="color-btn w-10 h-10 rounded-full border-2 border-transparent transition hover:scale-110" style="background:#eab308" onclick="selectColor('#eab308', this)"></button>
+                    <button class="color-btn w-10 h-10 rounded-full border-2 border-transparent transition hover:scale-110" style="background:#a855f7" onclick="selectColor('#a855f7', this)"></button>
+                </div>
+            </div>
+
+            <div id="main-controls" class="space-y-4">
+                <button onclick="showHostMenu()" class="royal-btn w-full py-4 text-xl rounded shadow-lg flex items-center justify-center gap-2">
+                    <span>👑</span> 创建房间 (Host)
+                </button>
+                <button onclick="showJoinMenu()" class="royal-btn secondary-btn w-full py-3 rounded flex items-center justify-center gap-2">
+                    <span>⚔️</span> 加入房间 (Join)
+                </button>
+            </div>
+
+            <!-- 主机等待界面 -->
+            <div id="host-menu" class="hidden space-y-6">
+                <div>
+                    <p class="text-xs text-yellow-500 mb-2 uppercase">房间暗号 (Room Code)</p>
+                    <div id="host-room-code" class="room-code-display py-4 rounded" onclick="copyRoomCode()">...</div>
+                    <p class="text-xs text-gray-500 mt-2">将此暗号告诉你的朋友</p>
+                </div>
+                <div id="host-status" class="text-sm text-yellow-200 animate-pulse">正在初始化王座...</div>
+                <button onclick="startGameAsHost()" id="host-start-btn" class="royal-btn w-full py-3 rounded" disabled>
+                    开始游戏 (等待玩家...)
+                </button>
+                <button onclick="resetMenu()" class="text-xs text-red-400 hover:text-red-300 underline">返回</button>
+            </div>
+
+            <!-- 加入界面 -->
+            <div id="join-menu" class="hidden space-y-6">
+                <div>
+                    <p class="text-xs text-yellow-500 mb-2 uppercase">输入房间暗号</p>
+                    <input type="text" id="join-code-input" class="royal-input w-full py-4 text-2xl uppercase" placeholder="AAAA" maxlength="4">
+                </div>
+                <button onclick="joinGame()" id="join-btn" class="royal-btn w-full py-3 rounded">
+                    连接房间
+                </button>
+                <p id="join-status" class="text-xs text-red-400 min-h-[1.5em]"></p>
+                <button onclick="resetMenu()" class="text-xs text-gray-500 hover:text-gray-300 underline">返回</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏 UI -->
+    <div id="game-ui" class="hidden pointer-events-none fixed inset-0">
+        <!-- 顶部 HUD -->
+        <div class="absolute top-4 left-0 w-full flex justify-between px-6 z-40">
+            <div class="bg-black/50 backdrop-blur border border-yellow-900/50 px-4 py-2 rounded-full">
+                <span class="text-xs text-yellow-500 block">PLAYERS</span>
+                <span id="player-count" class="text-xl font-bold text-white block text-center">1</span>
+            </div>
+            <div class="bg-black/50 backdrop-blur border border-yellow-900/50 px-4 py-2 rounded-full">
+                <span class="text-xs text-yellow-500 block">PING</span>
+                <span id="ping-display" class="text-xl font-bold text-green-400 block text-center">0ms</span>
+            </div>
+        </div>
+
+        <!-- 聊天/公告 -->
+        <div id="announcement" class="absolute top-20 left-1/2 -translate-x-1/2 text-yellow-400 text-shadow-lg text-lg font-bold transition-opacity duration-1000 opacity-0"></div>
+
+        <!-- 虚拟摇杆 -->
+        <div id="joystick-zone" class="pointer-events-auto">
+            <div id="joystick-knob"></div>
+        </div>
+        
+        <!-- 移动端攻击按钮 (可选) -->
+        <div id="mobile-dash" class="absolute bottom-10 right-10 w-20 h-20 bg-red-900/50 border-2 border-red-500 rounded-full flex items-center justify-center pointer-events-auto active:bg-red-700/80 active:scale-95 transition md:hidden">
+            <span class="text-2xl">⚡</span>
+        </div>
+    </div>
+    
+    <!-- 死亡画面 -->
+    <div id="game-over-screen" class="hidden fixed inset-0 flex items-center justify-center z-50 bg-black/90 fade-in text-center">
+        <div>
+            <h2 class="text-5xl text-red-600 mb-4 font-[Cinzel Decorative]">YOU DIED</h2>
+            <button onclick="respawnRequest()" class="royal-btn px-8 py-3 rounded text-xl">复活</button>
+        </div>
+    </div>
+
+    <canvas id="game-canvas"></canvas>
+    <div id="connection-log"></div>
+
+    <script>
+        // --- 全局变量与配置 ---
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 游戏物理常量
+        const ARENA_RADIUS = 400;
+        const PLAYER_RADIUS = 24;
+        const MAX_SPEED = 8;
+        const ACCEL = 0.5;
+        const FRICTION = 0.92;
+        const BOUNCE = 1.5;
+
+        // P2P 设置
+        let peer = null;
+        let connections = []; // Host用: 存储所有客户端连接
+        let hostConn = null;  // Client用: 存储到Host的连接
+        let isHost = false;
+        let myId = null;
+        let myRoomCode = null;
+
+        // 游戏状态
+        let players = {}; // 所有人 (Host 维护权威数据，Client 维护镜像数据)
+        let myState = {
+            id: null,
+            x: 0, y: 0,
+            vx: 0, vy: 0,
+            color: '#ef4444',
+            name: 'Player',
+            input: { x: 0, y: 0, dash: false },
+            status: 'alive',
+            lastUpdate: 0
+        };
+
+        // 输入
+        const keys = { w: false, a: false, s: false, d: false, Space: false };
+        let joystick = { active: false, x: 0, y: 0 };
+        let camera = { x: 0, y: 0 };
+        let particles = [];
+        let lastTime = 0;
+        
+        // 简易 ID 生成器 (4位字母)
+        function generateRoomCode() {
+            const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 移除易混淆字符
+            let result = "";
+            for(let i=0; i<4; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+            return result;
+        }
+
+        // --- 菜单逻辑 ---
+
+        function initPeer() {
+            // 使用 PeerJS 默认公用服务器
+            // 技巧：为了实现简单的 4 位房间号，我们实际上使用一个带前缀的真实 ID
+            // 真实 ID = "kingsrumble-v1-" + 4位码
+            return new Peer(null, {
+                debug: 1
+            });
+        }
+
+        function showHostMenu() {
+            document.getElementById('main-controls').classList.add('hidden');
+            document.getElementById('host-menu').classList.remove('hidden');
+            
+            myRoomCode = generateRoomCode();
+            const realId = `kr-lan-${myRoomCode}`;
+            
+            // 尝试创建指定 ID 的 Peer
+            peer = new Peer(realId);
+            
+            peer.on('open', (id) => {
+                myId = id;
+                document.getElementById('host-room-code').innerText = myRoomCode;
+                document.getElementById('host-status').innerText = "等待挑战者连接...";
+                document.getElementById('host-start-btn').disabled = false;
+                document.getElementById('host-start-btn').innerText = "开始游戏";
+                isHost = true;
+                
+                // Host 也要把自己加入玩家列表
+                const color = getSelectedColor();
+                const name = document.getElementById('player-name').value || "King";
+                addPlayer(id, name, color, true); // true = local
+                
+                startLoop(); // Host 立即开始循环
+            });
+
+            peer.on('connection', (conn) => {
+                handleHostConnection(conn);
+            });
+            
+            peer.on('error', (err) => {
+                console.error(err);
+                if(err.type === 'unavailable-id') {
+                    // ID 冲突，重试（极低概率）
+                    peer.destroy();
+                    setTimeout(showHostMenu, 100); 
+                } else {
+                    document.getElementById('host-status').innerText = "网络错误: " + err.type;
+                }
+            });
+        }
+
+        function handleHostConnection(conn) {
+            connections.push(conn);
+            updateLog(`Client connected: ${conn.peer}`);
+            
+            conn.on('data', (data) => {
+                // Host 处理客户端消息
+                if (data.type === 'join') {
+                    addPlayer(conn.peer, data.name, data.color, false);
+                    conn.send({ type: 'init', id: conn.peer, mapSize: ARENA_RADIUS });
+                    // 更新大厅状态
+                    document.getElementById('host-status').innerText = `${Object.keys(players).length} 位国王已就位`;
+                }
+                else if (data.type === 'input') {
+                    if (players[conn.peer]) {
+                        players[conn.peer].input = data.input;
+                        players[conn.peer].lastUpdate = Date.now();
+                    }
+                }
+                else if (data.type === 'respawn') {
+                    respawnPlayer(conn.peer);
+                }
+            });
+
+            conn.on('close', () => {
+                removePlayer(conn.peer);
+            });
+        }
+
+        function showJoinMenu() {
+            document.getElementById('main-controls').classList.add('hidden');
+            document.getElementById('join-menu').classList.remove('hidden');
+            peer = new Peer(); // 客户端随机 ID
+            peer.on('open', (id) => { myId = id; });
+        }
+
+        function joinGame() {
+            const inputCode = document.getElementById('join-code-input').value.trim().toUpperCase();
+            if (inputCode.length !== 4) {
+                document.getElementById('join-status').innerText = "暗号格式错误 (4位)";
+                return;
+            }
+            
+            const targetId = `kr-lan-${inputCode}`;
+            document.getElementById('join-status').innerText = "正在寻找房间...";
+            document.getElementById('join-btn').disabled = true;
+
+            hostConn = peer.connect(targetId);
+
+            hostConn.on('open', () => {
+                document.getElementById('join-status').innerText = "连接成功！";
+                isHost = false;
+                
+                // 发送加入请求
+                const color = getSelectedColor();
+                const name = document.getElementById('player-name').value || "Knight";
+                
+                hostConn.send({
+                    type: 'join',
+                    name: name,
+                    color: color
+                });
+
+                document.getElementById('menu-screen').classList.add('hidden');
+                document.getElementById('game-ui').classList.remove('hidden');
+                resize();
+                startLoop();
+            });
+
+            hostConn.on('data', (data) => {
+                if (data.type === 'init') {
+                    // 初始化
+                }
+                else if (data.type === 'worldState') {
+                    // 客户端：接收世界状态，直接覆盖本地
+                    // 为平滑可以使用插值，这里为了代码量直接覆盖，高频同步下也还可以
+                    players = data.players;
+                    
+                    // 检查自己是否死亡
+                    if (players[myId] && players[myId].status === 'dead' && myState.status !== 'dead') {
+                        showDeathScreen();
+                    }
+                    if (players[myId]) {
+                        myState.status = players[myId].status; // 同步状态
+                    }
+                }
+            });
+
+            hostConn.on('close', () => {
+                alert("与房主断开连接");
+                location.reload();
+            });
+
+            // 5秒超时检测
+            setTimeout(() => {
+                if (!hostConn.open) {
+                    document.getElementById('join-status').innerText = "找不到房间或连接超时";
+                    document.getElementById('join-btn').disabled = false;
+                }
+            }, 5000);
+        }
+
+        function startGameAsHost() {
+            document.getElementById('menu-screen').classList.add('hidden');
+            document.getElementById('game-ui').classList.remove('hidden');
+            resize();
+            // Host 已经在 Loop 中了
+        }
+
+        function resetMenu() {
+            if (peer) peer.destroy();
+            location.reload();
+        }
+
+        // --- 游戏核心逻辑 ---
+
+        function addPlayer(id, name, color, isLocal) {
+            // 随机出生点
+            const angle = Math.random() * Math.PI * 2;
+            const r = Math.random() * (ARENA_RADIUS * 0.6);
+            
+            players[id] = {
+                id: id,
+                name: name,
+                color: color,
+                x: Math.cos(angle) * r,
+                y: Math.sin(angle) * r,
+                vx: 0, vy: 0,
+                status: 'alive',
+                input: { x: 0, y: 0, dash: false }
+            };
+            
+            if (isLocal) myState.id = id;
+        }
+
+        function removePlayer(id) {
+            delete players[id];
+        }
+
+        function respawnPlayer(id) {
+            if (!players[id]) return;
+            const angle = Math.random() * Math.PI * 2;
+            const r = Math.random() * (ARENA_RADIUS * 0.5);
+            players[id].x = Math.cos(angle) * r;
+            players[id].y = Math.sin(angle) * r;
+            players[id].vx = 0;
+            players[id].vy = 0;
+            players[id].status = 'alive';
+        }
+
+        function respawnRequest() {
+            document.getElementById('game-over-screen').classList.add('hidden');
+            if (isHost) {
+                respawnPlayer(myId);
+            } else {
+                hostConn.send({ type: 'respawn' });
+                // 客户端预先重置状态以隐藏UI
+                myState.status = 'alive'; 
+            }
+        }
+
+        function showDeathScreen() {
+            document.getElementById('game-over-screen').classList.remove('hidden');
+            myState.status = 'dead';
+        }
+
+        // --- 物理引擎 (仅 Host 运行) ---
+        function updatePhysics() {
+            const playerIds = Object.keys(players);
+            
+            // 1. 应用输入与移动
+            playerIds.forEach(id => {
+                const p = players[id];
+                if (p.status !== 'alive') return;
+
+                // 加速度
+                let ax = p.input.x * ACCEL;
+                let ay = p.input.y * ACCEL;
+                
+                p.vx += ax;
+                p.vy += ay;
+                
+                // 摩擦力
+                p.vx *= FRICTION;
+                p.vy *= FRICTION;
+
+                // 速度限制
+                const speed = Math.sqrt(p.vx**2 + p.vy**2);
+                if (speed > MAX_SPEED) {
+                    p.vx = (p.vx / speed) * MAX_SPEED;
+                    p.vy = (p.vy / speed) * MAX_SPEED;
+                }
+
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // 边界死亡判定
+                const dist = Math.sqrt(p.x**2 + p.y**2);
+                if (dist > ARENA_RADIUS + PLAYER_RADIUS) {
+                    p.status = 'dead';
+                    // 产生死亡特效
+                    createExplosion(p.x, p.y, p.color);
+                    announce(p.name + " 跌落深渊!");
+                }
+            });
+
+            // 2. 玩家间碰撞 (弹球物理)
+            for (let i = 0; i < playerIds.length; i++) {
+                for (let j = i + 1; j < playerIds.length; j++) {
+                    const p1 = players[playerIds[i]];
+                    const p2 = players[playerIds[j]];
+                    
+                    if (p1.status !== 'alive' || p2.status !== 'alive') continue;
+
+                    const dx = p1.x - p2.x;
+                    const dy = p1.y - p2.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    const minDist = PLAYER_RADIUS * 2;
+
+                    if (dist < minDist) {
+                        // 计算碰撞角度
+                        const angle = Math.atan2(dy, dx);
+                        const tx = Math.cos(angle);
+                        const ty = Math.sin(angle);
+
+                        // 简单的动量交换与弹开
+                        const force = BOUNCE;
+                        
+                        p1.vx += tx * force;
+                        p1.vy += ty * force;
+                        p2.vx -= tx * force;
+                        p2.vy -= ty * force;
+
+                        // 避免重叠
+                        const overlap = (minDist - dist) / 2;
+                        p1.x += tx * overlap;
+                        p1.y += ty * overlap;
+                        p2.x -= tx * overlap;
+                        p2.y -= ty * overlap;
+
+                        // 特效
+                        createSparks((p1.x+p2.x)/2, (p1.y+p2.y)/2);
+                    }
+                }
+            }
+        }
+
+        // --- 主循环 ---
+        function startLoop() {
+            function loop(timestamp) {
+                const dt = timestamp - lastTime;
+                lastTime = timestamp;
+
+                // 1. 获取本地输入
+                let inputX = 0;
+                let inputY = 0;
+                if (keys.w) inputY -= 1;
+                if (keys.s) inputY += 1;
+                if (keys.a) inputX -= 1;
+                if (keys.d) inputX += 1;
+                
+                if (joystick.active) {
+                    inputX = joystick.x;
+                    inputY = joystick.y;
+                }
+
+                // 2. 逻辑分支
+                if (isHost) {
+                    // Host: 更新本地输入到 players 列表
+                    if (players[myId]) {
+                        players[myId].input = { x: inputX, y: inputY, dash: false };
+                    }
+                    // Host: 运行物理引擎
+                    updatePhysics();
+                    // Host: 广播状态 (每帧或隔帧)
+                    const state = { type: 'worldState', players: players };
+                    connections.forEach(conn => {
+                        if (conn.open) conn.send(state);
+                    });
+                } else {
+                    // Client: 发送输入给 Host
+                    if (hostConn && hostConn.open) {
+                        hostConn.send({
+                            type: 'input',
+                            input: { x: inputX, y: inputY, dash: false }
+                        });
+                    }
+                    // Client: 物理预测 (可选，这里为了简单不做预测，直接渲染服务器状态)
+                    // 如果觉得卡顿，可以添加客户端插值
+                }
+
+                // 3. 渲染
+                render();
+                requestAnimationFrame(loop);
+            }
+            requestAnimationFrame(loop);
+        }
+
+        // --- 渲染 ---
+        function render() {
+            // 设置相机跟随
+            let targetX = 0, targetY = 0;
+            if (myId && players[myId]) {
+                targetX = -players[myId].x + canvas.width/2;
+                targetY = -players[myId].y + canvas.height/2;
+            }
+            // 平滑相机
+            camera.x += (targetX - camera.x) * 0.1;
+            camera.y += (targetY - camera.y) * 0.1;
+
+            // 清空画布
+            ctx.fillStyle = '#1a0f0f';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+            ctx.translate(camera.x, camera.y);
+
+            // 绘制深渊
+            ctx.fillStyle = '#0f0505';
+            ctx.beginPath(); ctx.arc(0, 0, ARENA_RADIUS + 500, 0, Math.PI*2); ctx.fill();
+
+            // 绘制地板
+            const floorGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, ARENA_RADIUS);
+            floorGrad.addColorStop(0, '#451a03');
+            floorGrad.addColorStop(1, '#270e05');
+            ctx.fillStyle = floorGrad;
+            ctx.beginPath(); ctx.arc(0, 0, ARENA_RADIUS, 0, Math.PI*2); ctx.fill();
+
+            // 绘制网格线
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.1)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const step = 60;
+            for(let i = -ARENA_RADIUS; i < ARENA_RADIUS; i+=step) {
+                ctx.moveTo(i, -ARENA_RADIUS); ctx.lineTo(i, ARENA_RADIUS);
+                ctx.moveTo(-ARENA_RADIUS, i); ctx.lineTo(ARENA_RADIUS, i);
+            }
+            ctx.stroke();
+
+            // 绘制边界
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.arc(0, 0, ARENA_RADIUS, 0, Math.PI*2); ctx.stroke();
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(0, 0, ARENA_RADIUS - 10, 0, Math.PI*2); ctx.stroke();
+
+            // 绘制玩家
+            // 排序 (Y轴)
+            const renderList = Object.values(players).sort((a,b) => a.y - b.y);
+            
+            renderList.forEach(p => {
+                if (p.status !== 'alive') return;
+                
+                // 身体
+                ctx.shadowColor = 'black'; ctx.shadowBlur = 10;
+                ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI*2); ctx.fill();
+                ctx.shadowBlur = 0;
+                
+                // 高光
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                ctx.beginPath(); ctx.arc(p.x - 6, p.y - 6, 8, 0, Math.PI*2); ctx.fill();
+                
+                // 皇冠
+                drawCrown(ctx, p.x, p.y - PLAYER_RADIUS - 10);
+                
+                // 名字
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 12px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(p.name, p.x, p.y + PLAYER_RADIUS + 15);
+                
+                // 指示标 (自己)
+                if (p.id === myId) {
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.beginPath(); ctx.moveTo(p.x, p.y - 40); ctx.lineTo(p.x - 5, p.y - 50); ctx.lineTo(p.x + 5, p.y - 50); ctx.fill();
+                }
+            });
+
+            // 绘制特效粒子
+            updateAndDrawParticles();
+
+            ctx.restore();
+            
+            // 更新 UI
+            document.getElementById('player-count').innerText = Object.keys(players).length;
+        }
+
+        function drawCrown(ctx, x, y) {
+            ctx.fillStyle = '#fbbf24';
+            ctx.strokeStyle = '#b45309';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x - 10, y);
+            ctx.lineTo(x - 14, y - 8);
+            ctx.lineTo(x - 7, y - 4);
+            ctx.lineTo(x, y - 12);
+            ctx.lineTo(x + 7, y - 4);
+            ctx.lineTo(x + 14, y - 8);
+            ctx.lineTo(x + 10, y);
+            ctx.closePath();
+            ctx.fill(); ctx.stroke();
+        }
+
+        // --- 特效系统 ---
+        function createSparks(x, y) {
+            for(let i=0; i<8; i++) {
+                particles.push({
+                    x, y, 
+                    vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
+                    life: 1.0, color: '#fbbf24', size: Math.random()*3
+                });
+            }
+        }
+        function createExplosion(x, y, color) {
+             for(let i=0; i<20; i++) {
+                particles.push({
+                    x, y, 
+                    vx: (Math.random()-0.5)*15, vy: (Math.random()-0.5)*15,
+                    life: 1.5, color: color, size: Math.random()*5 + 2
+                });
+            }
+        }
+        function updateAndDrawParticles() {
+            for(let i=particles.length-1; i>=0; i--) {
+                const p = particles[i];
+                p.x += p.vx; p.y += p.vy;
+                p.life -= 0.05;
+                p.size *= 0.95;
+                
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+                ctx.globalAlpha = 1;
+                
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+        
+        function announce(text) {
+            const el = document.getElementById('announcement');
+            el.innerText = text;
+            el.style.opacity = 1;
+            setTimeout(() => el.style.opacity = 0, 2000);
+        }
+
+        // --- 工具函数 ---
+        
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function selectColor(color, btn) {
+            document.querySelectorAll('.color-btn').forEach(b => b.style.transform = 'scale(1)');
+            btn.style.transform = 'scale(1.2)';
+            btn.dataset.selected = "true";
+        }
+        function getSelectedColor() {
+            let c = '#ef4444';
+            document.querySelectorAll('.color-btn').forEach(b => {
+                if (b.dataset.selected === "true") c = b.style.backgroundColor; // 这里是 computed style，但足够了
+                // 简单起见，从 onclick 属性提取
+                if (b.style.transform.includes('1.2')) {
+                    c = b.getAttribute('onclick').match(/'(#[0-9a-f]{6})'/)[1];
+                }
+            });
+            return c;
+        }
+        function copyRoomCode() {
+            navigator.clipboard.writeText(myRoomCode);
+            document.getElementById('host-room-code').innerText = "已复制";
+            setTimeout(() => document.getElementById('host-room-code').innerText = myRoomCode, 1000);
+        }
+        function updateLog(msg) {
+            const el = document.getElementById('connection-log');
+            el.innerHTML += `<div>${msg}</div>`;
+        }
+
+        // --- 输入事件绑定 ---
+        window.addEventListener('keydown', e => { if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', e => { if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
+        
+        // 摇杆逻辑
+        const joyZone = document.getElementById('joystick-zone');
+        const joyKnob = document.getElementById('joystick-knob');
+        
+        // 简单的触摸检测
+        if ('ontouchstart' in window) {
+            joyZone.style.display = 'block';
+        }
+
+        joyZone.addEventListener('touchstart', e => {
+            e.preventDefault();
+            joystick.active = true;
+            updateJoystick(e.touches[0]);
+        }, {passive: false});
+
+        joyZone.addEventListener('touchmove', e => {
+            e.preventDefault();
+            if (joystick.active) updateJoystick(e.touches[0]);
+        }, {passive: false});
+
+        const endJoystick = (e) => {
+            e.preventDefault();
+            joystick.active = false;
+            joystick.x = 0; joystick.y = 0;
+            joyKnob.style.transform = 'translate(-50%, -50%)';
+        };
+        joyZone.addEventListener('touchend', endJoystick);
+        joyZone.addEventListener('touchcancel', endJoystick);
+
+        function updateJoystick(touch) {
+            const rect = joyZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            let dx = touch.clientX - centerX;
+            let dy = touch.clientY - centerY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const maxR = rect.width / 2;
+            
+            if (dist > maxR) {
+                dx = (dx / dist) * maxR;
+                dy = (dy / dist) * maxR;
+            }
+            
+            joyKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+            joystick.x = dx / maxR;
+            joystick.y = dy / maxR;
+        }
+
+        // 设置默认选中第一个颜色
+        selectColor('#ef4444', document.querySelector('.color-btn'));
+
+    </script>
+</body>
+</html>

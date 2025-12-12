@@ -206,7 +206,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // 恢复 signInWithCustomToken 用于预览环境
+        // 恢复所有必要的 Auth 函数
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -254,10 +254,10 @@
         let joystickActive = false;
         let joystickData = { x: 0, y: 0 };
 
-        // --- Firebase 配置 ---
+        // --- Firebase 配置与智能环境检测 ---
         
-        // 1. 默认使用您的生产环境配置（用于部署）
-        let firebaseConfig = {
+        // 1. 默认生产环境配置 (用于GitHub Pages)
+        let finalConfig = {
             apiKey: "AIzaSyCO8cH3uF3mPnQKOLo4pMsOpMF8ZigMnz8",
             authDomain: "king-rumble.firebaseapp.com",
             projectId: "king-rumble",
@@ -266,32 +266,47 @@
             appId: "1:897215414286:web:2234622388138dfd84bc5f",
             measurementId: "G-JEFKGG38M3"
         };
-        let appId = 'king-rumble-game-room'; // 生产环境房间ID
+        let finalAppId = 'king-rumble-game-room'; // 生产环境房间ID
+        let isPreview = false;
 
-        // 2. 自动检测：如果是在预览环境，覆盖为内部配置（修复报错）
+        // 2. 检测是否在预览环境 (Canvas)
         if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-            firebaseConfig = JSON.parse(__firebase_config);
-            // 预览环境通常使用动态 appId
-            appId = (typeof __app_id !== 'undefined') ? __app_id : 'preview-room';
+            console.log("检测到预览环境，切换至临时通道...");
+            try {
+                finalConfig = JSON.parse(__firebase_config);
+                finalAppId = (typeof __app_id !== 'undefined') ? __app_id : 'preview-room';
+                isPreview = true;
+            } catch (e) {
+                console.warn("预览配置解析失败，回退至生产配置");
+            }
         }
 
-        const app = initializeApp(firebaseConfig);
+        const app = initializeApp(finalConfig);
         const auth = getAuth(app);
         db = getFirestore(app);
         
+        // 3. 智能登录策略
         async function initAuth() {
             statusMsg.textContent = "正在连接皇家网络...";
             try {
-                // 优先检查是否有预览环境的 Token（解决预览报错）
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                if (isPreview && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    // 策略 A: 预览环境使用内置 Token (绕过域名限制)
                     await signInWithCustomToken(auth, __initial_auth_token);
+                    console.log("预览环境登录成功");
                 } else {
-                    // 生产环境使用匿名登录（请确保您在 Firebase 控制台开启了匿名登录）
+                    // 策略 B: 生产环境使用匿名登录 (GitHub Pages)
                     await signInAnonymously(auth);
+                    console.log("生产环境登录成功");
                 }
             } catch (error) {
-                console.error("Authentication failed:", error);
-                statusMsg.textContent = "连接失败: " + error.code;
+                console.error("Auth Error:", error);
+                // 错误信息汉化，方便调试
+                let errorText = "连接失败";
+                if (error.code === 'auth/configuration-not-found') errorText = "配置无效 (请检查控制台)";
+                if (error.code === 'auth/operation-not-allowed') errorText = "匿名登录未开启 (请去Firebase控制台开启)";
+                if (error.code === 'auth/unauthorized-domain') errorText = "域名未授权 (预览环境请使用内置Token)";
+                statusMsg.textContent = `${errorText}: ${error.code}`;
+                statusMsg.classList.add("text-red-500");
             }
         }
         initAuth();
@@ -308,7 +323,8 @@
         });
 
         function setupFirestoreListener() {
-            const playersRef = collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME);
+            // 使用动态判断的 appId，确保数据写入正确位置
+            const playersRef = collection(db, 'artifacts', finalAppId, 'public', 'data', COLLECTION_NAME);
             onSnapshot(playersRef, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     const data = change.doc.data();
@@ -350,7 +366,8 @@
             if (now - lastUploadTime < 80) return;
 
             try {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, myPlayerId), {
+                // 使用动态判断的 appId
+                await setDoc(doc(db, 'artifacts', finalAppId, 'public', 'data', COLLECTION_NAME, myPlayerId), {
                     x: Math.round(myState.x),
                     y: Math.round(myState.y),
                     color: myState.color,

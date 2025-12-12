@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>国王大乱斗 - 终极联机修复版</title>
+    <title>国王大乱斗 - 物理优化版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Playfair+Display:ital,wght@1,700&display=swap');
@@ -98,12 +98,6 @@
             transform: translate(-50%, -50%);
             box-shadow: 0 5px 15px rgba(0,0,0,0.6); pointer-events: none;
         }
-        
-        #debug-info {
-            position: fixed; top: 5px; right: 5px; 
-            font-family: monospace; font-size: 10px; color: rgba(255,255,255,0.3);
-            pointer-events: none; z-index: 100;
-        }
     </style>
 </head>
 <body>
@@ -126,18 +120,18 @@
                 <div class="text-center">
                     <label class="block text-xs font-bold mb-3 text-yellow-500 uppercase tracking-widest">选择你的宝石 (Gem)</label>
                     <div class="flex justify-center gap-4">
-                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #ef4444, #990000);" onclick="selectColor('#ef4444')"></button>
-                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #3b82f6, #003399);" onclick="selectColor('#3b82f6')"></button>
-                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #10b981, #006600);" onclick="selectColor('#10b981')"></button>
-                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #a855f7, #6600cc);" onclick="selectColor('#a855f7')"></button>
-                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #eab308, #cc9900);" onclick="selectColor('#eab308')"></button>
+                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #ff9999, #990000);" onclick="selectColor('#ef4444')"></button>
+                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #99ccff, #003399);" onclick="selectColor('#3b82f6')"></button>
+                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #99ff99, #006600);" onclick="selectColor('#10b981')"></button>
+                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #e6ccff, #6600cc);" onclick="selectColor('#a855f7')"></button>
+                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #ffffcc, #cc9900);" onclick="selectColor('#eab308')"></button>
                     </div>
                 </div>
 
                 <button id="start-btn" class="royal-btn w-full py-4 text-xl rounded mt-4" disabled>
                     开启征程
                 </button>
-                <p id="status-msg" class="text-xs text-center text-yellow-600/50 mt-2">正在建立连接...</p>
+                <p id="status-msg" class="text-xs text-center text-yellow-600/50 mt-2">正在通报国王...</p>
             </div>
         </div>
     </div>
@@ -154,7 +148,6 @@
 
     <!-- 游戏 UI -->
     <div id="game-ui" class="hidden pointer-events-none">
-        <div id="debug-info"></div>
         <div class="absolute top-0 left-0 w-full flex justify-between pt-4 px-4 z-40">
             <div class="hud-ribbon px-8 py-3 rounded-full shadow-2xl backdrop-blur">
                 <span class="text-xs text-yellow-500 block text-center">SURVIVORS</span>
@@ -166,7 +159,7 @@
                 <span id="game-status-text" class="text-xl font-bold text-green-400 block text-center">ALIVE</span>
             </div>
         </div>
-        
+
         <div id="joystick-zone" class="pointer-events-auto">
             <div id="joystick-knob"></div>
         </div>
@@ -184,7 +177,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- 变量定义 ---
@@ -197,28 +190,29 @@
         const respawnBtn = document.getElementById('respawn-btn');
         const statusMsg = document.getElementById('status-msg');
         const playerCountEl = document.getElementById('player-count');
-        const debugInfo = document.getElementById('debug-info');
         
         let currentUser = null;
         let myPlayerId = null;
         let db = null;
         let players = {};
         
-        // --- 物理引擎核心参数 (保持你的优化设置) ---
+        // --- 物理引擎核心参数优化 ---
         const ARENA_RADIUS = 380; 
         const PLAYER_RADIUS = 24; 
-        const FRICTION = 0.94; // 优化：高阻尼
-        const ACCELERATION = 0.25; // 优化：平滑起步
-        const MAX_SPEED = 10;
-        const BOUNCE_FORCE = 2.0; // 优化：强力反弹
         
-        // --- 关键修正：使用动态环境 AppID ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // 升级集合版本，清理旧数据
-        const COLLECTION_NAME = 'kings_rumble_royal_v2'; 
-
-        // 显示调试信息
-        debugInfo.innerText = `Room: ${appId.substring(0,6)}... | Ver: v2`;
+        // 1. 增加摩擦力 (0.97 -> 0.94): 提高“刹车”性能，减少滑行感
+        const FRICTION = 0.94; 
+        
+        // 2. 降低加速度 (0.5 -> 0.25): 让键盘控制更细腻，不容易窜出去
+        const ACCELERATION = 0.25; 
+        
+        const MAX_SPEED = 10; // 稍微降低最高速度
+        
+        // 3. 增强反弹力 (1.4 -> 2.0): 让碰撞更有打击感
+        const BOUNCE_FORCE = 2.0; 
+        
+        const COLLECTION_NAME = 'kings_rumble_royal_prod'; 
+        const APP_ID_PATH = 'king-rumble-game-room';
 
         let cameraX = 0;
         let cameraY = 0;
@@ -239,50 +233,30 @@
         let joystickActive = false;
         let joystickData = { x: 0, y: 0 };
 
-        // --- Firebase 配置 (关键修正) ---
-        // 优先使用环境注入的配置，否则使用备用配置
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : {
-                apiKey: "AIzaSyCO8cH3uF3mPnQKOLo4pMsOpMF8ZigMnz8",
-                authDomain: "king-rumble.firebaseapp.com",
-                projectId: "king-rumble",
-                storageBucket: "king-rumble.firebasestorage.app",
-                messagingSenderId: "897215414286",
-                appId: "1:897215414286:web:2234622388138dfd84bc5f",
-                measurementId: "G-JEFKGG38M3"
-            };
+        // --- Firebase 配置 ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCO8cH3uF3mPnQKOLo4pMsOpMF8ZigMnz8",
+            authDomain: "king-rumble.firebaseapp.com",
+            projectId: "king-rumble",
+            storageBucket: "king-rumble.firebasestorage.app",
+            messagingSenderId: "897215414286",
+            appId: "1:897215414286:web:2234622388138dfd84bc5f",
+            measurementId: "G-JEFKGG38M3"
+        };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         db = getFirestore(app);
         
-        // --- 认证初始化 (终极修复逻辑) ---
-        const initAuth = async () => {
+        async function initAuth() {
             try {
-                let signedIn = false;
-                // 1. 尝试使用环境令牌
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    try {
-                        console.log("Attempting custom token login...");
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                        signedIn = true;
-                    } catch (e) {
-                        console.warn("Custom token invalid, falling back to anonymous.", e);
-                    }
-                }
-                
-                // 2. 如果令牌失败或不存在，强制使用匿名登录
-                if (!signedIn) {
-                    console.log("Attempting anonymous login...");
-                    await signInAnonymously(auth);
-                }
+                await signInAnonymously(auth);
             } catch (error) {
-                console.error("Auth Critical Failure:", error);
-                statusMsg.textContent = "致命错误: 无法连接服务器";
+                console.error("Auth Error:", error);
+                statusMsg.textContent = "连接失败: 请检查网络";
                 statusMsg.classList.add("text-red-500", "font-bold");
             }
-        };
+        }
         initAuth();
 
         onAuthStateChanged(auth, (user) => {
@@ -290,23 +264,14 @@
                 currentUser = user;
                 myPlayerId = user.uid;
                 startBtn.disabled = false;
-                statusMsg.textContent = "✅ 宫门已开 (网络正常)";
+                statusMsg.textContent = "✅ 宫门已开";
                 statusMsg.className = "text-xs text-center text-green-500 mt-2 font-bold";
-                // 仅在确认登录后才启动监听
                 setupFirestoreListener();
-            } else {
-                startBtn.disabled = true;
-                statusMsg.textContent = "正在连接...";
             }
         });
 
         function setupFirestoreListener() {
-            if (!currentUser) return;
-            // 关键修正：使用 appId 动态路径，确保有权限监听
-            const playersRef = collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME);
-            
-            console.log("Listening to path:", `artifacts/${appId}/public/data/${COLLECTION_NAME}`);
-
+            const playersRef = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', COLLECTION_NAME);
             onSnapshot(playersRef, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     const data = change.doc.data();
@@ -314,20 +279,15 @@
                     
                     if (change.type === "added" || change.type === "modified") {
                         if (pid === myPlayerId) return;
-                        // 忽略过旧的数据 (超过30秒未更新视为离线)
-                        if (Date.now() - (data.timestamp || 0) > 30000) return;
-
                         if (!players[pid]) {
                             players[pid] = { ...data, currentX: data.x, currentY: data.y };
                         } else {
-                            // 线性插值目标
                             players[pid].targetX = data.x;
                             players[pid].targetY = data.y;
                             players[pid].status = data.status;
                             players[pid].color = data.color;
                             players[pid].name = data.name;
                             players[pid].msg = data.msg;
-                            // 消息检测优化
                             if (data.msg && data.msg !== players[pid].lastMsgContent) {
                                 players[pid].msgTimer = 240; 
                                 players[pid].lastMsgContent = data.msg;
@@ -337,15 +297,10 @@
                     if (change.type === "removed") delete players[pid];
                 });
 
-                // 刷新计数
                 let count = 0;
                 Object.values(players).forEach(p => { if(p.status === 'alive') count++; });
                 if(myState.status === 'alive') count++;
                 playerCountEl.innerText = count;
-            }, (error) => {
-                console.error("Snapshot Error:", error);
-                statusMsg.textContent = "数据同步中断";
-                statusMsg.classList.add("text-red-500");
             });
         }
 
@@ -353,23 +308,20 @@
         async function uploadMyState() {
             if (!currentUser) return;
             const now = Date.now();
-            if (now - lastUploadTime < 80) return; // 节流
+            if (now - lastUploadTime < 80) return;
 
             try {
-                // 关键修正：使用 appId 动态路径进行写入
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, myPlayerId), {
+                await setDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', COLLECTION_NAME, myPlayerId), {
                     x: Math.round(myState.x),
                     y: Math.round(myState.y),
                     color: myState.color,
                     name: myState.name,
                     status: myState.status,
-                    msg: myState.msg || '', // 确保字段存在
+                    msg: myState.msg,
                     timestamp: now
                 });
                 lastUploadTime = now;
-            } catch(e) {
-                console.error("Upload Error (Check Console):", e);
-            }
+            } catch(e) {}
         }
 
         // --- 视觉效果系统 ---
@@ -482,11 +434,12 @@
                 const dy = myState.y - otherY;
                 const dist = Math.sqrt(dx*dx + dy*dy);
                 
-                // 碰撞判定半径
+                // 碰撞判定半径稍微扩大(1.2倍)，让双方更容易同时触发判定
                 if (dist < PLAYER_RADIUS * 2.2) {
                     const angle = Math.atan2(dy, dx);
                     
                     // 只要判定到碰撞，就给一个巨大的反弹力
+                    // 这样即使双方画面有延迟，只要有一瞬间重叠，双方都会被弹开
                     myState.vx += Math.cos(angle) * BOUNCE_FORCE * 5;
                     myState.vy += Math.sin(angle) * BOUNCE_FORCE * 5;
                     

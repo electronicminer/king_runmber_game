@@ -3,238 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>国王大乱斗 - 至尊皇家版</title>
+    <title>国王大乱斗 - 联机诊断版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Playfair+Display:ital,wght@1,700&display=swap');
-
-        /* --- 皇家纹理背景 --- */
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            background-color: #2a0a12; 
-            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5 C 32 15 40 15 40 25 C 40 35 30 35 30 50 C 30 35 20 35 20 25 C 20 15 28 15 30 5 Z M 25 25 C 22 20 15 20 10 25 C 15 35 25 35 28 32 M 35 25 C 38 20 45 20 50 25 C 45 35 35 35 32 32' fill='none' stroke='%23ffd700' stroke-opacity='0.1' stroke-width='2'/%3E%3C/svg%3E");
-            touch-action: none; 
-            user-select: none; 
-            font-family: 'Playfair Display', serif;
-        }
+        body { margin: 0; overflow: hidden; background-color: #2a0a12; touch-action: none; user-select: none; font-family: 'Playfair Display', serif; }
         canvas { display: block; }
-        
-        /* --- 黄金画框容器 --- */
-        .gold-frame-panel {
-            background: linear-gradient(to bottom, #4a0404, #2a0202);
-            border: 8px solid transparent;
-            border-image: linear-gradient(45deg, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c) 1;
-            box-shadow: 0 0 0 4px #4a0404 inset, 0 20px 60px rgba(0,0,0,0.9), 0 0 30px rgba(255, 215, 0, 0.3);
-            position: relative;
-            color: #fbf5b7;
-        }
-        
-        /* 装饰角标 */
-        .ornament-tl, .ornament-tr, .ornament-bl, .ornament-br {
-            position: absolute; width: 40px; height: 40px;
-            background: radial-gradient(circle, #fcf6ba 10%, #bf953f 60%, transparent 70%);
-            border-radius: 50%; z-index: 10;
-        }
-        .ornament-tl { top: -20px; left: -20px; }
-        .ornament-tr { top: -20px; right: -20px; }
-        .ornament-bl { bottom: -20px; left: -20px; }
-        .ornament-br { bottom: -20px; right: -20px; }
-
-        /* --- 珠宝按钮 --- */
-        .royal-btn {
-            background: linear-gradient(to bottom, #b91c1c, #7f1d1d);
-            border: 2px solid #fcd34d;
-            box-shadow: inset 0 4px 8px rgba(255,255,255,0.3), 0 4px 0 #92400e, 0 8px 10px rgba(0,0,0,0.5);
-            color: #fef3c7;
-            font-family: 'Cinzel Decorative', cursive;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            transition: transform 0.1s, box-shadow 0.1s;
-        }
-        .royal-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            background: linear-gradient(to bottom, #dc2626, #991b1b);
-            box-shadow: inset 0 4px 12px rgba(255,255,255,0.5), 0 6px 0 #92400e, 0 12px 20px rgba(220, 38, 38, 0.4);
-        }
-        .royal-btn:active {
-            transform: translateY(4px);
-            box-shadow: inset 0 4px 8px rgba(0,0,0,0.3), 0 0 0 #92400e, 0 2px 5px rgba(0,0,0,0.5);
-        }
-        .royal-btn:disabled {
-            filter: grayscale(1);
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .fade-in { animation: fadeIn 1s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-
-        .hud-ribbon {
-            background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(70,10,10,0.9) 20%, rgba(70,10,10,0.9) 80%, rgba(0,0,0,0) 100%);
-            border-top: 2px solid #b38728;
-            border-bottom: 2px solid #b38728;
-            color: #fcf6ba;
-            text-shadow: 0 2px 4px black;
-            font-family: 'Cinzel Decorative', cursive;
-        }
-
-        #joystick-zone {
-            position: absolute; bottom: 50px; left: 50px;
-            width: 140px; height: 140px;
-            background: radial-gradient(circle, rgba(180, 83, 9, 0.2) 0%, rgba(0,0,0,0.5) 100%);
-            border: 4px solid rgba(251, 191, 36, 0.4);
-            border-radius: 50%;
-            display: none; z-index: 50;
-            box-shadow: 0 0 20px rgba(251, 191, 36, 0.1);
-        }
-        #joystick-knob {
-            position: absolute; top: 50%; left: 50%;
-            width: 60px; height: 60px;
-            background: radial-gradient(circle at 30% 30%, #fcd34d, #b45309);
-            border: 2px solid #fff; border-radius: 50%;
-            transform: translate(-50%, -50%);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.6); pointer-events: none;
-        }
+        .royal-btn { background: linear-gradient(to bottom, #b91c1c, #7f1d1d); border: 2px solid #fcd34d; color: #fef3c7; font-family: 'Cinzel Decorative', cursive; transition: transform 0.1s; }
+        .royal-btn:active { transform: translateY(2px); }
+        .royal-btn:disabled { filter: grayscale(1); cursor: not-allowed; }
     </style>
 </head>
 <body>
 
     <!-- 登录界面 -->
-    <div id="login-screen" class="fixed inset-0 flex items-center justify-center z-50 bg-black/80 backdrop-blur-md fade-in">
-        <div class="gold-frame-panel p-10 w-full max-w-md text-center">
-            <div class="ornament-tl"></div><div class="ornament-tr"></div>
-            <div class="ornament-bl"></div><div class="ornament-br"></div>
+    <div id="login-screen" class="fixed inset-0 flex items-center justify-center z-50 bg-black/90">
+        <div class="bg-gray-900 border-4 border-yellow-600 p-8 rounded-lg max-w-md w-full text-center shadow-2xl">
+            <h1 class="text-4xl text-yellow-500 mb-2 font-bold" style="font-family: 'Cinzel Decorative'">King's Rumble</h1>
+            <p class="text-gray-400 text-sm mb-6">强制联机诊断版 v1.0</p>
             
-            <h1 class="text-5xl mb-2 text-yellow-400 drop-shadow-lg" style="font-family: 'Cinzel Decorative';">King's Rumble</h1>
-            <p class="text-yellow-200/60 mb-8 italic font-serif">"夺回属于你的王座"</p>
+            <input type="text" id="username-input" class="w-full bg-black border border-yellow-700 text-yellow-100 p-3 rounded mb-4 text-center" placeholder="输入你的名字" maxlength="8">
             
-            <div class="space-y-6 text-left relative z-20">
-                <div>
-                    <label class="block text-xs font-bold mb-2 text-yellow-500 uppercase tracking-widest">御用徽号 (Name)</label>
-                    <input type="text" id="username-input" class="w-full bg-black/40 border border-yellow-700/50 text-yellow-100 p-4 text-center text-xl font-bold focus:outline-none focus:border-yellow-400 transition" placeholder="King Arthur" maxlength="8">
-                </div>
-                
-                <div class="text-center">
-                    <label class="block text-xs font-bold mb-3 text-yellow-500 uppercase tracking-widest">选择你的宝石 (Gem)</label>
-                    <div class="flex justify-center gap-4">
-                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #ff9999, #990000);" onclick="selectColor('#ef4444')"></button>
-                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #99ccff, #003399);" onclick="selectColor('#3b82f6')"></button>
-                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #99ff99, #006600);" onclick="selectColor('#10b981')"></button>
-                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #e6ccff, #6600cc);" onclick="selectColor('#a855f7')"></button>
-                        <button class="color-btn w-12 h-12 rounded-full shadow-lg transition hover:scale-110 border-2 border-transparent" style="background: radial-gradient(circle at 30% 30%, #ffffcc, #cc9900);" onclick="selectColor('#eab308')"></button>
-                    </div>
-                </div>
-
-                <button id="start-btn" class="royal-btn w-full py-4 text-xl rounded mt-4" disabled>
-                    开启征程
-                </button>
-                <p id="status-msg" class="text-xs text-center text-yellow-600/50 mt-2">正在打磨王冠...</p>
+            <!-- 状态显示区域 -->
+            <div id="connection-status" class="bg-black/50 p-4 rounded text-left text-xs font-mono space-y-1 mb-4 border border-gray-700">
+                <div id="step-1" class="text-gray-500">1. 初始化 Firebase... <span class="loading">⏳</span></div>
+                <div id="step-2" class="text-gray-500">2. 连接身份验证服务 (Auth)... <span class="loading">⏳</span></div>
+                <div id="step-3" class="text-gray-500">3. 连接数据库 (Firestore)... <span class="loading">⏳</span></div>
             </div>
+
+            <button id="start-btn" class="royal-btn w-full py-3 text-xl rounded" disabled>等待连接...</button>
         </div>
     </div>
 
-    <!-- 游戏结束 -->
-    <div id="game-over-screen" class="hidden fixed inset-0 flex items-center justify-center z-50 bg-black/95 fade-in">
-        <div class="text-center relative">
-            <div class="absolute inset-0 bg-red-900/20 blur-3xl rounded-full"></div>
-            <h2 class="text-6xl text-red-600 mb-6 drop-shadow-[0_0_15px_rgba(220,38,38,0.8)] relative z-10" style="font-family: 'Cinzel Decorative';">王权陨落</h2>
-            <p class="text-yellow-100/70 text-xl mb-10 font-serif italic relative z-10">历史不会记住失败者</p>
-            <button id="respawn-btn" class="royal-btn px-12 py-4 text-2xl relative z-10 rounded">重整旗鼓</button>
+    <!-- 错误弹窗 (平时隐藏) -->
+    <div id="error-modal" class="hidden fixed inset-0 flex items-center justify-center z-[100] bg-black/95">
+        <div class="bg-red-900/90 border-4 border-red-500 p-6 max-w-lg w-full rounded text-white shadow-2xl">
+            <h2 class="text-2xl font-bold mb-4">❌ 连接失败 (Critical Error)</h2>
+            <div class="bg-black p-4 rounded font-mono text-sm text-red-300 break-all mb-4" id="error-details">
+                Unknown Error
+            </div>
+            <p class="text-sm mb-4">请根据上方错误代码检查 Firebase 设置：</p>
+            <ul class="text-sm list-disc list-inside space-y-2 text-gray-200 mb-6">
+                <li><b>auth/operation-not-allowed</b>: 未在控制台开启“匿名登录”。</li>
+                <li><b>auth/unauthorized-domain</b>: 未将 GitHub 域名添加到授权白名单。</li>
+                <li><b>auth/configuration-not-found</b>: API Key 配置错误。</li>
+            </ul>
+            <button onclick="location.reload()" class="bg-white text-red-900 px-4 py-2 rounded font-bold hover:bg-gray-200">刷新重试</button>
         </div>
     </div>
 
-    <!-- 游戏 UI -->
-    <div id="game-ui" class="hidden pointer-events-none">
-        <div class="absolute top-0 left-0 w-full flex justify-between pt-4 px-4 z-40">
-            <div class="hud-ribbon px-8 py-3 rounded-full shadow-2xl backdrop-blur">
-                <span class="text-xs text-yellow-500 block text-center">SURVIVORS</span>
-                <span id="player-count" class="text-3xl font-bold text-white block text-center">1</span>
-            </div>
-            
-            <div class="hud-ribbon px-8 py-3 rounded-full shadow-2xl backdrop-blur">
-                <span class="text-xs text-yellow-500 block text-center">STATUS</span>
-                <span id="game-status-text" class="text-xl font-bold text-green-400 block text-center">ALIVE</span>
-            </div>
+    <div id="game-ui" class="hidden pointer-events-none fixed inset-0">
+        <div class="absolute top-4 right-4 text-yellow-500 font-bold bg-black/50 px-4 py-2 rounded border border-yellow-600">
+            在线玩家: <span id="player-count">1</span>
         </div>
-
-        <!-- 离线模式提示 -->
-        <div id="offline-banner" class="hidden absolute top-20 left-1/2 -translate-x-1/2 bg-red-900/80 border border-red-500 px-6 py-2 rounded-full text-white text-sm font-bold shadow-lg pointer-events-none z-50 animate-pulse">
-            ⚠️ 离线演练模式 (部署后可联机)
-        </div>
-
-        <div id="joystick-zone" class="pointer-events-auto">
-            <div id="joystick-knob"></div>
-        </div>
-        
-        <div class="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-lg px-6 pointer-events-auto flex gap-3 z-40">
-            <input type="text" id="chat-input" class="flex-1 bg-black/70 border-2 border-yellow-700/50 text-yellow-100 px-6 py-3 rounded-full focus:outline-none focus:border-yellow-400 focus:bg-black/90 transition shadow-xl font-serif placeholder-yellow-800" placeholder="发布御旨..." maxlength="20">
-            <button id="chat-send-btn" class="royal-btn w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-xl">
-                ✒️
-            </button>
+        <!-- 摇杆区域 -->
+        <div id="joystick-zone" class="absolute bottom-10 left-10 w-32 h-32 bg-yellow-600/20 rounded-full border-2 border-yellow-600/50 pointer-events-auto hidden">
+            <div id="joystick-knob" class="absolute top-1/2 left-1/2 w-12 h-12 bg-yellow-500 rounded-full -translate-x-1/2 -translate-y-1/2 shadow-lg"></div>
         </div>
     </div>
 
     <canvas id="game-canvas"></canvas>
 
-    <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- 变量定义 ---
-        const canvas = document.getElementById('game-canvas');
-        const ctx = canvas.getContext('2d');
-        const loginScreen = document.getElementById('login-screen');
-        const gameOverScreen = document.getElementById('game-over-screen');
-        const gameUI = document.getElementById('game-ui');
+        // UI 元素
+        const step1 = document.getElementById('step-1');
+        const step2 = document.getElementById('step-2');
+        const step3 = document.getElementById('step-3');
         const startBtn = document.getElementById('start-btn');
-        const respawnBtn = document.getElementById('respawn-btn');
-        const statusMsg = document.getElementById('status-msg');
-        const playerCountEl = document.getElementById('player-count');
-        const offlineBanner = document.getElementById('offline-banner');
-        
-        let currentUser = null;
-        let myPlayerId = 'guest-' + Math.floor(Math.random() * 10000);
-        let db = null;
-        let players = {};
-        let bots = []; // 离线模式的机器人
-        
-        // 游戏模式控制
-        let isOfflineMode = false;
-        
-        // 游戏参数
-        const ARENA_RADIUS = 380; 
-        const PLAYER_RADIUS = 24; 
-        const FRICTION = 0.97;
-        const ACCELERATION = 0.5;
-        const MAX_SPEED = 13;
-        const BOUNCE_FORCE = 1.4; 
-        const COLLECTION_NAME = 'kings_rumble_royal_prod'; 
+        const errorModal = document.getElementById('error-modal');
+        const errorDetails = document.getElementById('error-details');
 
-        let cameraX = 0;
-        let cameraY = 0;
-        let particles = [];
-        let frameCount = 0; 
+        // 标记成功函数
+        function markSuccess(el) {
+            el.className = "text-green-400 font-bold";
+            el.innerHTML = el.innerText.replace('⏳', '✅').replace('...', '') + ' [OK]';
+        }
+        function markFail(el) {
+            el.className = "text-red-500 font-bold";
+            el.innerHTML = el.innerText.replace('⏳', '❌');
+        }
 
-        let myState = {
-            x: 0, y: 0,
-            vx: 0, vy: 0,
-            color: '#ef4444',
-            name: 'King',
-            status: 'alive',
-            msg: '',
-            msgTimer: 0
-        };
-
-        const keys = { w: false, a: false, s: false, d: false };
-        let joystickActive = false;
-        let joystickData = { x: 0, y: 0 };
-
-        // --- Firebase 配置 (来自您的截图) ---
+        // --- 1. 初始化 Firebase ---
         const firebaseConfig = {
             apiKey: "AIzaSyCO8cH3uF3mPnQKOLo4pMsOpMF8ZigMnz8",
             authDomain: "king-rumble.firebaseapp.com",
@@ -244,459 +97,167 @@
             appId: "1:897215414286:web:2234622388138dfd84bc5f",
             measurementId: "G-JEFKGG38M3"
         };
-        const appId = 'king-rumble-game-room';
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        db = getFirestore(app);
         
-        // --- 核心修复：智能降级认证 ---
-        async function initAuth() {
-            statusMsg.textContent = "正在连接皇家网络...";
+        // 生产环境 Collection 名称
+        const COLLECTION_NAME = 'kings_rumble_royal_prod'; 
+        const APP_ID_PATH = 'king-rumble-game-room';
+
+        let app, auth, db, currentUser;
+
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            markSuccess(step1);
+        } catch (e) {
+            markFail(step1);
+            showError(e);
+        }
+
+        // --- 2. 执行登录 ---
+        async function connect() {
             try {
-                // 尝试登录
+                // 强制使用匿名登录 (GitHub Pages 必须使用这个)
                 await signInAnonymously(auth);
             } catch (error) {
-                console.warn("联机连接失败，切换至离线模式", error);
-                // 任何错误（域名限制、配置错误）都触发离线模式
-                activateOfflineMode(error);
+                markFail(step2);
+                showError(error);
             }
         }
-        initAuth();
+        connect();
 
+        // 监听登录状态
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 currentUser = user;
-                myPlayerId = user.uid;
-                startBtn.disabled = false;
-                statusMsg.textContent = "✅ 宫门已开 (联机模式)";
-                statusMsg.className = "text-xs text-center text-green-500 mt-2 font-bold";
-                setupFirestoreListener();
+                markSuccess(step2);
+                startFirestoreListener(); // 登录成功后立刻监听数据库
             }
         });
 
-        // 激活离线模式
-        function activateOfflineMode(error) {
-            isOfflineMode = true;
-            startBtn.disabled = false;
-            statusMsg.textContent = "⚠️ 预览环境：已启用离线演练模式";
-            statusMsg.className = "text-xs text-center text-yellow-500 mt-2 font-bold";
-            
-            // 生成一些 AI 机器人
-            const botNames = ["Duke Iron", "Sir Lancelot", "Baron Void", "Countess Red", "Lord Pixel"];
-            const botColors = ["#334155", "#475569", "#64748b", "#94a3b8", "#cbd5e1"];
-            
-            for(let i=0; i<5; i++) {
-                bots.push({
-                    id: 'bot-'+i,
-                    x: (Math.random()-0.5) * 400,
-                    y: (Math.random()-0.5) * 400,
-                    vx: 0, vy: 0,
-                    color: botColors[i],
-                    name: botNames[i],
-                    status: 'alive',
-                    targetX: 0, targetY: 0, // AI 目标
-                    moveTimer: 0
-                });
-            }
-        }
-
-        function setupFirestoreListener() {
-            if (isOfflineMode) return;
-            const playersRef = collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME);
-            onSnapshot(playersRef, (snapshot) => {
-                snapshot.docChanges().forEach((change) => {
-                    const data = change.doc.data();
-                    const pid = change.doc.id;
-                    if (change.type === "added" || change.type === "modified") {
-                        if (pid === myPlayerId) return;
-                        if (!players[pid]) {
-                            players[pid] = { ...data, currentX: data.x, currentY: data.y };
-                        } else {
-                            players[pid].targetX = data.x;
-                            players[pid].targetY = data.y;
-                            players[pid].status = data.status;
-                            players[pid].color = data.color;
-                            players[pid].name = data.name;
-                            players[pid].msg = data.msg;
-                            if (data.msg && data.msg !== players[pid].lastMsgContent) {
-                                players[pid].msgTimer = 240; 
-                                players[pid].lastMsgContent = data.msg;
+        // --- 3. 监听数据库 ---
+        let players = {};
+        let myState = { x: 0, y: 0, vx: 0, vy: 0, color: '#ef4444', name: 'Player' };
+        
+        function startFirestoreListener() {
+            try {
+                const playersRef = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', COLLECTION_NAME);
+                
+                // 设置监听器
+                onSnapshot(playersRef, (snapshot) => {
+                    // 第一次收到数据，或者数据更新，都代表连接数据库成功
+                    if (!step3.classList.contains('text-green-400')) {
+                        markSuccess(step3);
+                        startBtn.disabled = false;
+                        startBtn.innerText = "进入游戏";
+                        startBtn.classList.add('animate-pulse');
+                    }
+                    
+                    snapshot.docChanges().forEach((change) => {
+                        const data = change.doc.data();
+                        const pid = change.doc.id;
+                        if (pid === currentUser.uid) return;
+                        
+                        if (change.type === "added" || change.type === "modified") {
+                            if (!players[pid]) players[pid] = { ...data };
+                            else {
+                                players[pid].targetX = data.x;
+                                players[pid].targetY = data.y;
+                                players[pid].color = data.color;
+                                players[pid].name = data.name;
                             }
                         }
-                    }
-                    if (change.type === "removed") delete players[pid];
+                        if (change.type === "removed") delete players[pid];
+                    });
+                    
+                    document.getElementById('player-count').innerText = Object.keys(players).length + 1;
+                    
+                }, (error) => {
+                    // 监听器报错 (通常是权限问题)
+                    markFail(step3);
+                    showError(error);
                 });
-            });
-        }
-
-        let lastUploadTime = 0;
-        async function uploadMyState() {
-            if (isOfflineMode || !currentUser) return;
-            const now = Date.now();
-            if (now - lastUploadTime < 80) return;
-            try {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, myPlayerId), {
-                    x: Math.round(myState.x),
-                    y: Math.round(myState.y),
-                    color: myState.color,
-                    name: myState.name,
-                    status: myState.status,
-                    msg: myState.msg,
-                    timestamp: now
-                });
-                lastUploadTime = now;
-            } catch(e) {}
-        }
-
-        // --- 视觉效果系统 ---
-        function createParticles(x, y, color, type = 'sparkle') {
-            const count = type === 'sparkle' ? 8 : 15;
-            for(let i=0; i<count; i++) {
-                particles.push({
-                    x: x, y: y,
-                    vx: (Math.random() - 0.5) * (type === 'sparkle' ? 5 : 8),
-                    vy: (Math.random() - 0.5) * (type === 'sparkle' ? 5 : 8),
-                    life: 1.0, color: color, type: type, size: Math.random() * 3 + 1
-                });
+                
+            } catch (e) {
+                markFail(step3);
+                showError(e);
             }
         }
 
-        let floorPattern = null;
-        function createFloorPattern() {
-            const pCanvas = document.createElement('canvas');
-            pCanvas.width = 100; pCanvas.height = 100;
-            const pCtx = pCanvas.getContext('2d');
-            pCtx.fillStyle = '#3c2a21'; pCtx.fillRect(0, 0, 100, 100);
-            pCtx.fillStyle = '#4e342e';
-            pCtx.beginPath(); pCtx.moveTo(50, 0); pCtx.lineTo(100, 50); pCtx.lineTo(50, 100); pCtx.lineTo(0, 50); pCtx.fill();
-            pCtx.fillStyle = '#b45309';
-            pCtx.beginPath(); pCtx.arc(50, 50, 5, 0, Math.PI*2); pCtx.fill();
-            floorPattern = ctx.createPattern(pCanvas, 'repeat');
+        // 显示错误弹窗
+        function showError(error) {
+            console.error(error);
+            errorModal.classList.remove('hidden');
+            let msg = `${error.code}\n${error.message}`;
+            errorDetails.innerText = msg;
         }
 
-        // --- 游戏主循环 ---
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            createFloorPattern();
-        }
+        // --- 简单的游戏逻辑 (为了让能跑起来验证联机) ---
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        let isPlaying = false;
+
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
         window.addEventListener('resize', resize);
         resize();
 
-        function startGame() {
-            const nameInput = document.getElementById('username-input');
-            myState.name = nameInput.value.trim() || "King";
-            respawn();
-            loginScreen.classList.add('hidden');
-            gameUI.classList.remove('hidden');
-            if (isOfflineMode) offlineBanner.classList.remove('hidden');
-            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-                document.getElementById('joystick-zone').style.display = 'block';
-            }
-            gameLoop();
-        }
-
-        function respawn() {
-            const angle = Math.random() * Math.PI * 2;
-            const r = Math.random() * (ARENA_RADIUS * 0.5);
-            myState.x = Math.cos(angle) * r;
-            myState.y = Math.sin(angle) * r;
-            myState.vx = 0; myState.vy = 0;
-            myState.status = 'alive';
-            gameOverScreen.classList.add('hidden');
-            document.getElementById('game-status-text').innerText = "ALIVE";
-            document.getElementById('game-status-text').className = "text-xl font-bold text-green-400 block text-center";
-        }
-
-        // 简单的 AI 逻辑
-        function updateBots() {
-            if (!isOfflineMode) return;
+        startBtn.onclick = () => {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('game-ui').classList.remove('hidden');
+            const name = document.getElementById('username-input').value || "Knight";
+            myState.name = name;
+            myState.x = canvas.width/2;
+            myState.y = canvas.height/2;
+            isPlaying = true;
             
-            bots.forEach(bot => {
-                if (bot.status !== 'alive') return;
-                
-                // AI 决策：随机移动 或 冲向玩家
-                bot.moveTimer--;
-                if (bot.moveTimer <= 0) {
-                    bot.moveTimer = Math.random() * 60 + 30;
-                    if (Math.random() < 0.6) {
-                        // 冲向圆心
-                        bot.targetX = (Math.random() - 0.5) * 200;
-                        bot.targetY = (Math.random() - 0.5) * 200;
-                    } else {
-                        // 冲向玩家
-                        bot.targetX = myState.x;
-                        bot.targetY = myState.y;
-                    }
-                }
-                
-                // 物理移动
-                const dx = bot.targetX - bot.x;
-                const dy = bot.targetY - bot.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                
-                if (dist > 0) {
-                    bot.vx += (dx/dist) * 0.3; // AI 加速度
-                    bot.vy += (dy/dist) * 0.3;
-                }
-                
-                bot.vx *= FRICTION;
-                bot.vy *= FRICTION;
-                bot.x += bot.vx;
-                bot.y += bot.vy;
-                
-                // 边界检测
-                if (Math.sqrt(bot.x**2 + bot.y**2) > ARENA_RADIUS + PLAYER_RADIUS) {
-                    bot.x = 0; bot.y = 0; // 简单复活
-                    bot.vx = 0; bot.vy = 0;
-                }
-            });
-        }
+            if('ontouchstart' in window) document.getElementById('joystick-zone').classList.remove('hidden');
+            loop();
+        };
 
-        function updatePhysics() {
-            frameCount++;
-            updateBots();
+        // 简单的输入控制
+        const keys = {};
+        window.onkeydown = e => keys[e.key] = true;
+        window.onkeyup = e => keys[e.key] = false;
 
-            for(let i=particles.length-1; i>=0; i--) {
-                let p = particles[i];
-                p.x += p.vx; p.y += p.vy; p.life -= 0.03;
-                if(p.life <= 0) particles.splice(i, 1);
+        let lastUpload = 0;
+
+        function loop() {
+            if(!isPlaying) return;
+            requestAnimationFrame(loop);
+
+            // 移动
+            if(keys['w']) myState.y -= 5;
+            if(keys['s']) myState.y += 5;
+            if(keys['a']) myState.x -= 5;
+            if(keys['d']) myState.x += 5;
+
+            // 绘制
+            ctx.fillStyle = '#2a0a12';
+            ctx.fillRect(0,0,canvas.width, canvas.height);
+            
+            // 画别人
+            for(let pid in players) {
+                const p = players[pid];
+                // 简单插值
+                if(p.targetX) { p.x = (p.x||p.targetX)*0.9 + p.targetX*0.1; p.y = (p.y||p.targetY)*0.9 + p.targetY*0.1; }
+                ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 20, 0, Math.PI*2); ctx.fill();
             }
 
-            if (myState.status !== 'alive') return;
-            
-            if (frameCount % 4 === 0 && (Math.abs(myState.vx) > 1 || Math.abs(myState.vy) > 1)) {
-                particles.push({
-                    x: myState.x + (Math.random()-0.5)*10, y: myState.y + (Math.random()-0.5)*10,
-                    vx: 0, vy: 0, life: 0.6, color: '#fbbf24', type: 'trail', size: 2
+            // 画自己
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath(); ctx.arc(myState.x, myState.y, 20, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.fillText(myState.name, myState.x - 10, myState.y - 30);
+
+            // 上传 (每100ms)
+            const now = Date.now();
+            if(now - lastUpload > 100 && currentUser) {
+                setDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', COLLECTION_NAME, currentUser.uid), {
+                    x: myState.x, y: myState.y, color: myState.color, name: myState.name, timestamp: now
                 });
+                lastUpload = now;
             }
-
-            let ax = 0, ay = 0;
-            if (keys.w) ay -= ACCELERATION; if (keys.s) ay += ACCELERATION;
-            if (keys.a) ax -= ACCELERATION; if (keys.d) ax += ACCELERATION;
-            if (joystickActive) { ax = joystickData.x * ACCELERATION; ay = joystickData.y * ACCELERATION; }
-
-            myState.vx += ax; myState.vy += ay;
-            myState.vx *= FRICTION; myState.vy *= FRICTION;
-
-            const speed = Math.sqrt(myState.vx**2 + myState.vy**2);
-            if (speed > MAX_SPEED) {
-                myState.vx = (myState.vx / speed) * MAX_SPEED;
-                myState.vy = (myState.vy / speed) * MAX_SPEED;
-            }
-
-            myState.x += myState.vx; myState.y += myState.vy;
-
-            // 统一玩家列表 (联机玩家 OR 离线机器人)
-            const activeEntities = isOfflineMode ? bots : Object.values(players);
-
-            // 碰撞检测
-            activeEntities.forEach(p => {
-                if (p.status !== 'alive') return;
-                
-                // 离线模式不需要插值
-                const otherX = isOfflineMode ? p.x : (p.currentX || p.x);
-                const otherY = isOfflineMode ? p.y : (p.currentY || p.y);
-                
-                // 插值更新 (仅联机)
-                if (!isOfflineMode && p.targetX !== undefined) {
-                    p.currentX = p.currentX + (p.targetX - p.currentX) * 0.15;
-                    p.currentY = p.currentY + (p.targetY - p.currentY) * 0.15;
-                }
-
-                const dx = myState.x - otherX;
-                const dy = myState.y - otherY;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                
-                if (dist < PLAYER_RADIUS * 2) {
-                    const angle = Math.atan2(dy, dx);
-                    
-                    // 玩家反弹
-                    myState.vx += Math.cos(angle) * BOUNCE_FORCE * 5;
-                    myState.vy += Math.sin(angle) * BOUNCE_FORCE * 5;
-                    
-                    // 如果是打机器人，机器人也要被撞飞
-                    if (isOfflineMode) {
-                        p.vx -= Math.cos(angle) * BOUNCE_FORCE * 5;
-                        p.vy -= Math.sin(angle) * BOUNCE_FORCE * 5;
-                    }
-                    
-                    const overlap = (PLAYER_RADIUS * 2) - dist;
-                    myState.x += Math.cos(angle) * overlap;
-                    myState.y += Math.sin(angle) * overlap;
-
-                    createParticles((myState.x + otherX)/2, (myState.y + otherY)/2, '#fffbeb');
-                }
-                if (p.msgTimer > 0) p.msgTimer--;
-            });
-
-            const distFromCenter = Math.sqrt(myState.x**2 + myState.y**2);
-            if (distFromCenter > ARENA_RADIUS + PLAYER_RADIUS) {
-                die();
-            }
-
-            if (myState.msgTimer > 0) myState.msgTimer--;
-            if (myState.msgTimer <= 0) myState.msg = '';
-        }
-
-        function die() {
-            myState.status = 'dead';
-            myState.vx = 0; myState.vy = 0;
-            document.getElementById('game-status-text').innerText = "DEAD";
-            document.getElementById('game-status-text').className = "text-xl font-bold text-red-600 block text-center";
-            gameOverScreen.classList.remove('hidden');
-            uploadMyState();
-        }
-
-        // --- 绘图函数 ---
-        function drawCrown(x, y, scale = 1, color = '#fbbf24') {
-            ctx.save();
-            const floatY = Math.sin(frameCount * 0.1) * 3;
-            ctx.translate(x, y - PLAYER_RADIUS - 8 + floatY);
-            ctx.scale(scale, scale);
-            ctx.beginPath(); ctx.ellipse(0, 5, 12, 3, 0, 0, Math.PI*2);
-            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)'; ctx.fill();
-            ctx.fillStyle = color; ctx.strokeStyle = '#b45309'; ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.moveTo(-15, 0); ctx.quadraticCurveTo(-15, -10, -20, -15);
-            ctx.lineTo(-10, -8); ctx.lineTo(0, -22); ctx.lineTo(10, -8);
-            ctx.quadraticCurveTo(15, -10, 20, -15); ctx.quadraticCurveTo(15, 0, 15, 0);
-            ctx.quadraticCurveTo(0, 6, -15, 0); ctx.closePath();
-            const grad = ctx.createLinearGradient(-20, -20, 20, 0);
-            grad.addColorStop(0, '#fef08a'); grad.addColorStop(0.5, '#eab308'); grad.addColorStop(1, '#a16207');
-            ctx.fillStyle = grad; ctx.fill(); ctx.stroke();
-            ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(0, -12, 3, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(-1, -13, 1, 0, Math.PI*2); ctx.fill();
-            ctx.restore();
-        }
-
-        function drawPlayer(x, y, color, name, msg, isSelf) {
-            ctx.fillStyle = 'rgba(0,0,0,0.5)';
-            ctx.beginPath(); ctx.ellipse(x, y + 8, PLAYER_RADIUS, PLAYER_RADIUS * 0.6, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.arc(x, y, PLAYER_RADIUS + 2, 0, Math.PI * 2); ctx.fill();
-            const grad = ctx.createRadialGradient(x - 8, y - 8, 2, x, y, PLAYER_RADIUS);
-            grad.addColorStop(0, '#fff'); grad.addColorStop(0.2, color); grad.addColorStop(0.8, color); grad.addColorStop(1, '#1a0505');
-            ctx.beginPath(); ctx.arc(x, y, PLAYER_RADIUS, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
-            ctx.beginPath(); ctx.ellipse(x - 6, y - 6, PLAYER_RADIUS/2.5, PLAYER_RADIUS/3.5, -Math.PI/4, 0, Math.PI*2);
-            ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
-            drawCrown(x, y, 1, '#fbbf24');
-            ctx.font = 'bold 12px "Cinzel Decorative"'; ctx.textAlign = 'center'; ctx.fillStyle = '#fde047';
-            ctx.shadowColor = 'black'; ctx.shadowBlur = 4; ctx.fillText(name, x, y + PLAYER_RADIUS + 20); ctx.shadowBlur = 0;
-            if (msg) {
-                ctx.font = '14px "Playfair Display"'; const width = ctx.measureText(msg).width + 20;
-                ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.roundRect(x - width/2 + 2, y - 73, width, 30, 4); ctx.fill();
-                ctx.fillStyle = '#fef3c7'; ctx.strokeStyle = '#b45309'; ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.roundRect(x - width/2, y - 75, width, 30, 4); ctx.fill(); ctx.stroke();
-                ctx.fillStyle = '#451a03'; ctx.fillText(msg, x, y - 55);
-                ctx.beginPath(); ctx.moveTo(x, y - 45); ctx.lineTo(x - 6, y - 38); ctx.lineTo(x + 6, y - 38);
-                ctx.fillStyle = '#fef3c7'; ctx.fill(); ctx.stroke();
-            }
-        }
-
-        function draw() {
-            const targetCamX = -myState.x + canvas.width / 2;
-            const targetCamY = -myState.y + canvas.height / 2;
-            cameraX += (targetCamX - cameraX) * 0.08;
-            cameraY += (targetCamY - cameraY) * 0.08;
-
-            ctx.fillStyle = '#2a0a12'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.clearRect(0,0,canvas.width, canvas.height); 
-            ctx.save(); ctx.translate(cameraX, cameraY);
-
-            const abyssGrad = ctx.createRadialGradient(0,0, ARENA_RADIUS, 0,0, ARENA_RADIUS + 200);
-            abyssGrad.addColorStop(0, 'rgba(0,0,0,0.5)'); abyssGrad.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = abyssGrad; ctx.beginPath(); ctx.arc(0,0, ARENA_RADIUS+200, 0, Math.PI*2); ctx.fill();
-
-            ctx.fillStyle = '#271c19'; ctx.beginPath(); ctx.arc(0, 20, ARENA_RADIUS, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(0, 0, ARENA_RADIUS, 0, Math.PI*2); ctx.save(); ctx.clip();
-            if (floorPattern) { ctx.fillStyle = floorPattern; ctx.fillRect(-ARENA_RADIUS, -ARENA_RADIUS, ARENA_RADIUS*2, ARENA_RADIUS*2); }
-            ctx.strokeStyle = 'rgba(251, 191, 36, 0.15)'; ctx.lineWidth = 2; ctx.beginPath();
-            for(let i=0; i<8; i++) { const angle = i * (Math.PI/4); ctx.moveTo(0,0); ctx.lineTo(Math.cos(angle)*ARENA_RADIUS, Math.sin(angle)*ARENA_RADIUS); }
-            ctx.stroke();
-            ctx.beginPath(); ctx.arc(0, 0, 150, 0, Math.PI*2); ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)'; ctx.lineWidth = 15; ctx.stroke();
-            ctx.fillStyle = 'rgba(251, 191, 36, 0.2)'; ctx.beginPath();
-            for(let i=0; i<16; i++) { const r = i%2===0 ? 80 : 40; const a = i * (Math.PI/8); ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); }
-            ctx.fill(); ctx.restore();
-
-            ctx.beginPath(); ctx.arc(0, 0, ARENA_RADIUS, 0, Math.PI*2); ctx.strokeStyle = '#b45309'; ctx.lineWidth = 12; ctx.stroke();
-            ctx.beginPath(); ctx.arc(0, 0, ARENA_RADIUS - 6, 0, Math.PI*2); ctx.strokeStyle = '#fcd34d'; ctx.lineWidth = 4; ctx.stroke();
-            for(let i=0; i<24; i++) { const a = i * (Math.PI*2/24); const x = Math.cos(a) * ARENA_RADIUS; const y = Math.sin(a) * ARENA_RADIUS; ctx.fillStyle = '#fffbeb'; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill(); }
-
-            // 绘制玩家 (包括机器人)
-            const entities = isOfflineMode ? bots : Object.values(players);
-            const allEntities = entities.concat(myState.status==='alive' ? [myState] : []);
-            allEntities.sort((a,b) => (isOfflineMode ? a.y - b.y : (a.currentY||a.y) - (b.currentY||b.y)));
-
-            allEntities.forEach(p => {
-                const isSelf = (p === myState);
-                if (p.status === 'alive') {
-                    // 离线模式不用 currentX，直接用 x
-                    const dx = isOfflineMode ? p.x : (p.currentX||p.x);
-                    const dy = isOfflineMode ? p.y : (p.currentY||p.y);
-                    drawPlayer(dx, dy, p.color, p.name, p.msg, isSelf);
-                }
-            });
-
-            particles.forEach(p => {
-                ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
-                if (p.type === 'sparkle') { ctx.fillRect(p.x - p.size*2, p.y - 0.5, p.size*4, 1); ctx.fillRect(p.x - 0.5, p.y - p.size*2, 1, p.size*4); }
-            });
-            ctx.globalAlpha = 1; ctx.restore();
-            
-            // 更新玩家数量显示
-            const count = isOfflineMode ? bots.length + 1 : Object.keys(players).length + 1;
-            playerCountEl.innerText = count;
-        }
-
-        function gameLoop() {
-            updatePhysics();
-            uploadMyState();
-            draw();
-            requestAnimationFrame(gameLoop);
-        }
-
-        // --- 事件 ---
-        startBtn.onclick = startGame;
-        respawnBtn.onclick = respawn;
-        window.selectColor = (c) => {
-            myState.color = c;
-            document.querySelectorAll('.color-btn').forEach(b => {
-                const isActive = b.onclick.toString().includes(c);
-                b.style.borderColor = isActive ? '#fcd34d' : 'transparent';
-                b.style.transform = isActive ? 'scale(1.2)' : 'scale(1)';
-            });
-        };
-        window.onkeydown = (e) => {
-            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
-            if (e.key === 'Enter') {
-                const input = document.getElementById('chat-input');
-                if (document.activeElement === input) {
-                    const txt = input.value.trim();
-                    if(txt) { myState.msg = txt; myState.msgTimer = 240; input.value=''; input.blur(); uploadMyState(); }
-                } else { input.focus(); }
-            }
-        };
-        window.onkeyup = (e) => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; };
-        document.getElementById('chat-send-btn').onclick = () => {
-             const input = document.getElementById('chat-input');
-             const txt = input.value.trim();
-             if(txt) { myState.msg = txt; myState.msgTimer = 240; input.value=''; input.blur(); uploadMyState(); }
-        };
-
-        const joyZone = document.getElementById('joystick-zone');
-        const joyKnob = document.getElementById('joystick-knob');
-        joyZone.ontouchstart = (e) => { e.preventDefault(); joystickActive=true; updateJoy(e.touches[0]); };
-        joyZone.ontouchmove = (e) => { e.preventDefault(); if(joystickActive) updateJoy(e.touches[0]); };
-        joyZone.ontouchend = (e) => { e.preventDefault(); joystickActive=false; joystickData={x:0,y:0}; joyKnob.style.transform = 'translate(-50%,-50%)'; };
-        function updateJoy(touch) {
-            const rect = joyZone.getBoundingClientRect();
-            let dx = touch.clientX - (rect.left + rect.width/2);
-            let dy = touch.clientY - (rect.top + rect.height/2);
-            const dist = Math.sqrt(dx*dx+dy*dy); const maxR = 40;
-            if(dist > maxR) { dx = (dx/dist)*maxR; dy = (dy/dist)*maxR; }
-            joyKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-            joystickData.x = dx/maxR; joystickData.y = dy/maxR;
         }
     </script>
 </body>

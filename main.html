@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>国王大乱斗 - 至尊皇家版</title>
+    <title>国王大乱斗 - 物理优化版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Playfair+Display:ital,wght@1,700&display=swap');
@@ -196,13 +196,21 @@
         let db = null;
         let players = {};
         
-        // 游戏参数
+        // --- 物理引擎核心参数优化 ---
         const ARENA_RADIUS = 380; 
         const PLAYER_RADIUS = 24; 
-        const FRICTION = 0.97;
-        const ACCELERATION = 0.5;
-        const MAX_SPEED = 13;
-        const BOUNCE_FORCE = 1.4; 
+        
+        // 1. 增加摩擦力 (0.97 -> 0.94): 提高“刹车”性能，减少滑行感
+        const FRICTION = 0.94; 
+        
+        // 2. 降低加速度 (0.5 -> 0.25): 让键盘控制更细腻，不容易窜出去
+        const ACCELERATION = 0.25; 
+        
+        const MAX_SPEED = 10; // 稍微降低最高速度
+        
+        // 3. 增强反弹力 (1.4 -> 2.0): 让碰撞更有打击感
+        const BOUNCE_FORCE = 2.0; 
+        
         const COLLECTION_NAME = 'kings_rumble_royal_prod'; 
         const APP_ID_PATH = 'king-rumble-game-room';
 
@@ -242,11 +250,10 @@
         
         async function initAuth() {
             try {
-                // 直接尝试匿名登录
                 await signInAnonymously(auth);
             } catch (error) {
                 console.error("Auth Error:", error);
-                statusMsg.textContent = "连接失败: 请在Firebase后台开启匿名登录";
+                statusMsg.textContent = "连接失败: 请检查网络";
                 statusMsg.classList.add("text-red-500", "font-bold");
             }
         }
@@ -324,8 +331,8 @@
             for(let i=0; i<count; i++) {
                 particles.push({
                     x: x, y: y,
-                    vx: (Math.random() - 0.5) * (type === 'sparkle' ? 5 : 8),
-                    vy: (Math.random() - 0.5) * (type === 'sparkle' ? 5 : 8),
+                    vx: (Math.random() - 0.5) * (type === 'sparkle' ? 6 : 10),
+                    vy: (Math.random() - 0.5) * (type === 'sparkle' ? 6 : 10),
                     life: 1.0, color: color, type: type, size: Math.random() * 3 + 1
                 });
             }
@@ -396,6 +403,7 @@
                 });
             }
 
+            // 物理控制：更低的加速度让控制更精准
             let ax = 0, ay = 0;
             if (keys.w) ay -= ACCELERATION; if (keys.s) ay += ACCELERATION;
             if (keys.a) ax -= ACCELERATION; if (keys.d) ax += ACCELERATION;
@@ -426,13 +434,20 @@
                 const dy = myState.y - otherY;
                 const dist = Math.sqrt(dx*dx + dy*dy);
                 
-                if (dist < PLAYER_RADIUS * 2) {
+                // 碰撞判定半径稍微扩大(1.2倍)，让双方更容易同时触发判定
+                if (dist < PLAYER_RADIUS * 2.2) {
                     const angle = Math.atan2(dy, dx);
+                    
+                    // 只要判定到碰撞，就给一个巨大的反弹力
+                    // 这样即使双方画面有延迟，只要有一瞬间重叠，双方都会被弹开
                     myState.vx += Math.cos(angle) * BOUNCE_FORCE * 5;
                     myState.vy += Math.sin(angle) * BOUNCE_FORCE * 5;
-                    const overlap = (PLAYER_RADIUS * 2) - dist;
-                    myState.x += Math.cos(angle) * overlap;
-                    myState.y += Math.sin(angle) * overlap;
+                    
+                    // 物理推挤
+                    const overlap = (PLAYER_RADIUS * 2.2) - dist;
+                    myState.x += Math.cos(angle) * overlap * 0.5;
+                    myState.y += Math.sin(angle) * overlap * 0.5;
+
                     createParticles((myState.x + otherX)/2, (myState.y + otherY)/2, '#fffbeb');
                 }
                 if (p.msgTimer > 0) p.msgTimer--;
